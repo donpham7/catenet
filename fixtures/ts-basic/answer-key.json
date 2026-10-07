@@ -100,6 +100,10 @@
           "confidence": "exact"
         },
         {
+          "file": "src/legacy/consumer.cjs",
+          "confidence": "exact"
+        },
+        {
           "file": "src/legacy/report.cjs",
           "confidence": "exact"
         },
@@ -185,6 +189,10 @@
           "confidence": "exact"
         },
         {
+          "file": "src/legacy/consumer.cjs",
+          "confidence": "exact"
+        },
+        {
           "file": "src/legacy/report.cjs",
           "confidence": "exact"
         },
@@ -220,6 +228,16 @@
           "file": "src/cycle/a.ts",
           "confidence": "exact",
           "via": "import { round }"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact",
+          "via": "export * from ./lib re-exports round and clamp (through the lib barrel)"
+        },
+        {
+          "file": "src/legacy/helpers.cjs",
+          "confidence": "exact",
+          "via": "require(\"../lib/math\") destructures round"
         },
         {
           "file": "src/lib/format.ts",
@@ -267,6 +285,14 @@
           "confidence": "exact"
         },
         {
+          "file": "src/legacy/consumer.cjs",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/legacy/helpers.cjs",
+          "confidence": "exact"
+        },
+        {
           "file": "src/legacy/report.cjs",
           "confidence": "exact"
         },
@@ -304,7 +330,7 @@
         "src/lib/index.ts",
         "src/ui/widget.ts"
       ],
-      "notes": "Published via export * chain (src/index.ts -> lib/index.ts -> math.ts). setup.ts reaches it only through a side-effect import of polyfills.ts. Cycle a<->b included."
+      "notes": "Published via export * chain (src/index.ts -> lib/index.ts -> math.ts). setup.ts reaches it only through a side-effect import of polyfills.ts. Cycle a<->b included. src/index.ts is DIRECT: export * chains re-export math's symbols, so it re-exports them."
     },
     {
       "target": "src/ui/base.ts",
@@ -375,6 +401,46 @@
       ],
       "covered": [],
       "notes": "Import cycle: traversal must terminate; the target itself is never its own dependent."
+    },
+    {
+      "target": "src/legacy/helpers.cjs#double",
+      "published_api": false,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "src/legacy/consumer.cjs",
+          "confidence": "exact",
+          "via": "helpers.double() on require(\"./helpers.cjs\")"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/legacy/consumer.cjs",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [],
+      "notes": "CommonJS `exports.double = function`; used as a member of a required module."
+    },
+    {
+      "target": "src/legacy/report.cjs#report",
+      "published_api": false,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "src/legacy/consumer.cjs",
+          "confidence": "exact",
+          "via": "report() where report = require(\"./report.cjs\")"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/legacy/consumer.cjs",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [],
+      "notes": "CommonJS `module.exports = function report`: calling the required module calls its default export."
     }
   ]
 }

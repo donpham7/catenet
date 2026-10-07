@@ -21,7 +21,7 @@
     },
     {
       "from": "pybasic/plugins/loader.py",
-      "specifier": "f\"pybasic.plugins.{name}\"",
+      "specifier": "pybasic.plugins.{name}",
       "subkind": "unresolved"
     }
   ],

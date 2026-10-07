@@ -4,8 +4,9 @@ dist/
 .DS_Store
 
 # Catenet's own local state: derived graph, events, proposals. policy.yaml is shared and committed.
-.catenet/*
-!.catenet/policy.yaml
+# A pattern containing a slash only matches at the root, so use **/ to cover nested repos (e.g. fixtures).
+**/.catenet/*
+!**/.catenet/policy.yaml
 
 # Spike scratch output (databases, generated inputs)
 spikes/data/

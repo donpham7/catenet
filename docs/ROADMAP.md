@@ -23,6 +23,10 @@ Each milestone lists acceptance criteria that can be checked, not just described
 ADRs record runtime/license/name decisions made with the owner.
 
 ## M1. Code graph indexer
+**Status:** done 2026-10-07, awaiting owner review. Answer keys reproduced exactly on all three fixtures
+(`packages/core/test/acceptance.test.ts`); single-file reindex p95 230-426 ms on 2,011 files
+(`packages/core/bench/RESULTS.md`); incremental updates equal full rebuilds (`test/incremental.test.ts`); ADR-0013.
+
 - Tree-sitter extraction for TS/JS and Python: files, symbols, imports, calls (best-effort), contains, tests edges.
 - SQLite store, incremental update by content hash, `external` nodes for unresolved imports.
 - CLI: `catenet index`, `catenet deps`, `catenet dependents`, `catenet impact` (counts + evidence).
@@ -34,6 +38,8 @@ heuristic cases reported separately); single-file incremental reindex < 1 s on a
 - Long-lived daemon (socket), file watcher, query cache.
 - MCP server with read-only tools (see ARCHITECTURE 2.7), bounded responses.
 - `catenet doctor`.
+- Make the update path cheaper for the watcher (deferred from the M1 review): compare import resolutions only where the
+  added/deleted paths could matter, and write `published_api` only for rows whose value changed.
 
 **Acceptance:** Claude Code can connect to the MCP server and answer structural questions on fixtures; tool responses
 bounded and deterministic; daemon restarts cleanly; `doctor` reports healthy/unhealthy accurately.
@@ -66,6 +72,7 @@ a README explains the methodology and its limits.
 - Policy engine, per-rule `on_match` (`record_only | tell_agent | ask_human | block`, ADR-0003), rules in `.catenet/policy.yaml`, blast-radius scoring, protected paths, policy self-protection.
 - Claude Code `PreToolUse` integration returning allow/ask/deny plus additional context (dependents/tests).
 - `catenet why`, decision evidence, conservative Bash handling.
+- Intra-file call edges (deferred from M1, ADR-0013), so symbol-level evidence includes callers in the same file.
 - Decide which edges may cause `block` (today: anything but `inferred`; consider excluding `heuristic` too), using M4 data.
 - Off-task detection (rule `off-task`) as **experimental, capped at `tell_agent`** (may be deferred if time-boxed).
 

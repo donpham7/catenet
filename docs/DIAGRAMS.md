@@ -167,7 +167,7 @@ flowchart LR
 
 ## Storage schema
 
-graph.db (nodes, edges, cached metrics, schema version) and events.db (sessions, prompts, tool calls, decisions, diffs, errors, schema version).
+graph.db (nodes, edges, derived file facts and file-level deps, meta) and events.db (sessions, prompts, tool calls, decisions, diffs, errors, schema version).
 
 ```mermaid
 erDiagram
@@ -200,11 +200,24 @@ erDiagram
     float hotspot_score
   }
   GRAPH_META {
-    int schema_version
+    string key PK "schema_version|config_hash"
+    string value
+  }
+  FILE_FACTS {
+    int file_id PK
+    string content_hash
+    string facts_json "derived: re-resolve without re-parsing"
+  }
+  FILE_DEPS {
+    int src_file FK
+    int dst_file FK
+    string confidence "derived: file-level projection"
   }
   NODES ||--o{ EDGES : "src"
   NODES ||--o{ EDGES : "dst"
-  NODES ||--o| METRICS : "cached, rebuildable"
+  NODES ||--o| METRICS : "cached, rebuildable (later)"
+  NODES ||--o| FILE_FACTS : "file nodes"
+  NODES ||--o{ FILE_DEPS : "src/dst files"
 
   SESSIONS {
     string id PK

@@ -84,4 +84,6 @@ pnpm build            # tsc for each package under packages/
 pnpm typecheck        # tsc --noEmit for packages/ and spikes/
 pnpm lint             # biome check (pnpm format to auto-fix)
 pnpm test             # vitest run
+pnpm --filter @catenet/core bench                     # M1 indexing benchmark (results: packages/core/bench/RESULTS.md)
+node packages/cli/dist/main.js index --repo <dir>     # after pnpm build; also deps|dependents|impact <target>
 ```

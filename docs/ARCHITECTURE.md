@@ -39,27 +39,44 @@ all agents share one graph.
 ### 2.1 Indexer (`packages/parsers`, `packages/core`)
 - Parses source with tree-sitter via `web-tree-sitter` (WASM, ADR-0011). v1: TypeScript/JavaScript, Python.
 - Emits nodes and edges (section 2.2) with a `confidence` (`exact` | `heuristic`) and `provenance` (`parser`).
-- **Incremental:** content-hash per file; on change, re-parse that file and re-resolve its edges.
-  Use a file watcher in the daemon plus `git diff` reconciliation on startup.
-- Import resolution per language (tsconfig paths, package.json workspaces, Python packages/relative imports).
-  Anything that does not resolve to a repo file becomes an `external` node with `subkind` `third_party`, `builtin` or
-  `unresolved` (ADR-0008), never dropped silently.
+- **Discovery:** `git ls-files --cached --others --exclude-standard` inside a work tree (honours `.gitignore`), else a
+  walker with built-in ignores. Packages are found from `package.json` / `pyproject.toml` / `setup.py` (ADR-0008).
+- **Extraction** (`@catenet/parsers`, pure): source text to `FileFacts` (symbols with export names, imports with
+  bindings, uses of imported names, class heritage, `__all__`, parse-error count). CommonJS `module.exports` /
+  `exports.x` are treated as exports; calling a `require`d module directly uses its default export.
+- **Import resolution** per language: relative paths with TS extension probing, tsconfig `paths`/`baseUrl` (JSONC,
+  relative `extends`; exact pattern first, then longest prefix, falling back to normal resolution when the alias
+  target is missing; an undeclared fallback stays `unresolved`), workspace package names via `package.json` `exports`/`main` (with a heuristic `dist/` to `src/`
+  mapping), Node built-ins; Python source roots, relative imports, `__init__.py`, the stdlib list and declared
+  dependencies. Anything that does not resolve to a repo file becomes an `external` node with `subkind`
+  `third_party`, `builtin` or `unresolved` (ADR-0008), never dropped silently.
+- **Symbol resolution** follows import bindings through `export *`, `export { x } from`, Python package re-exports and
+  `__all__` to the defining symbol, so a call through a barrel is a direct dependency on the defining file. Imported
+  names become `references` edges (the name is imported, used or not); uses become `calls`/`references` from the
+  enclosing symbol; `extends` becomes `inherits`; files that re-export a symbol get a `references` edge to it.
+- **Incremental (ADR-0013):** content hash per file; extracted facts are stored, so only changed files are re-parsed.
+  An update re-resolves changed and added files, every file whose import resolution differs between the old and new
+  file sets, and the importers of any file whose export surface changed (following files that re-expose names). A
+  manifest or tsconfig change, `--full`, or the first run rebuilds from stored facts. `test/incremental.test.ts`
+  checks that every update equals a full rebuild. M2's daemon adds a file watcher and `git diff` reconciliation.
 - **Call edges are best-effort.** Mark dynamic dispatch / unresolved calls `heuristic`. Never present
   heuristic edges as certain in explanations.
-- Test mapping (ADR-0002): detect test files by convention and config and store them as `file` nodes with
-  `subkind: test` (individual test cases, when needed, are `symbol` nodes with `subkind: test_case`). Add `tests`
-  edges from test files/cases to the symbols/files they import or reference. There is no separate `test` node kind.
+- Test mapping (ADR-0002): detect test files by convention (`test/`, `tests/`, `__tests__/`, `*.test.*`, `*.spec.*`,
+  `test_*.py`, `*_test.py`; config-based detection later) and store them as `file` nodes with `subkind: test`
+  (individual test cases, when needed, are `symbol` nodes with `subkind: test_case`). Every dependency edge from a
+  test file has kind `tests`, so tests are never dependents. There is no separate `test` node kind.
 
 ### 2.2 Graph store
 SQLite via Node's built-in `node:sqlite` (ADR-0010), WAL mode, one DB per repo under `.catenet/` (git-ignored by default).
+The authoritative schema and migrations are in `packages/core/src/store/schema.ts`; this is a summary.
 
 ```sql
 CREATE TABLE nodes (
   id          INTEGER PRIMARY KEY,
   kind        TEXT NOT NULL,   -- repo|package|file|symbol|external (M6A/M6B add component|requirement|arch_rule|adr)
   subkind     TEXT,            -- file: source|test; symbol: function|class|method|type|variable|test_case|...
-  name        TEXT NOT NULL,
-  path        TEXT,            -- repo-relative, for file/symbol
+  name        TEXT NOT NULL,   -- symbols: qualified name (Class.method); externals: package/module name or specifier
+  path        TEXT,            -- repo-relative, for package/file/symbol
   start_line  INTEGER, end_line INTEGER,
   lang        TEXT,
   content_hash TEXT,           -- file hash, or symbol-region hash
@@ -75,24 +92,39 @@ CREATE TABLE edges (
   attrs       TEXT,
   PRIMARY KEY (src, dst, kind)
 );
+CREATE UNIQUE INDEX nodes_identity ON nodes(kind, coalesce(path,''), name, coalesce(subkind,''));  -- stable upserts
 CREATE INDEX edges_dst ON edges(dst, kind);   -- reverse traversal is the hot path
 CREATE INDEX nodes_path ON nodes(path);
 CREATE INDEX nodes_name ON nodes(name);
-CREATE TABLE meta (schema_version INTEGER NOT NULL);  -- reported by `catenet doctor`
+CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);  -- schema_version (reported by `catenet doctor`), config_hash
+-- Derived, rebuildable (ADR-0013):
+CREATE TABLE file_facts (file_id PRIMARY KEY -> nodes, content_hash, facts_json);   -- re-resolve without re-parsing
+CREATE TABLE file_deps  (src_file -> nodes, dst_file -> nodes, confidence, PRIMARY KEY (src_file, dst_file));
 ```
+Nodes keep a stable identity (file = path; symbol = path + qualified name + subkind; external = subkind + name), so a
+reindex upserts rows and incoming edges from other files survive. `file_deps` is the file-level projection of
+`imports|calls|references|inherits` edges (exact if any underlying edge is exact); traversals run on it.
 `kind` columns are free text validated in code (no CHECK constraint), so the spec layer adds kinds without a schema rewrite.
 
-Derived data (roles, fan-in, hotspot scores) is computed and cached in a `metrics` table; it is
+Derived data (roles, fan-in, hotspot scores) will be computed and cached in a `metrics` table (not in M1); it is
 always rebuildable. **Nobody edits the graph.** A rescan can drop and rebuild everything.
 
-Kuzu or another graph DB is a possible later swap; keep the store behind an interface
-(`GraphStore`) so queries don't leak SQL.
+Kuzu or another graph DB is a possible later swap; all SQL lives in `SqliteGraphStore`
+(`packages/core/src/store/sqlite-store.ts`), so queries and the indexer don't leak SQL.
 
 ### 2.3 Query engine
 Core read-only queries (all return structured results plus the paths/edges that justify them):
-- `findSymbol(name|pattern)`, `getFile(path)`
-- `dependencies(node, depth)`, `dependents(node, depth, kinds)` via recursive CTE
-- `impact(nodeOrFileSet)` → `{direct, transitive, packages, tests{covered, uncovered}, publishedApi, unresolvedImports, score, evidence[]}`
+Targets are `path`, `path#Symbol` or a bare symbol name (ambiguous names list candidates). Implemented in M1
+(`packages/core/src/query/graph.ts`):
+- `findSymbols(name)`
+- `dependents(target, depth?)`: direct = files with a dependency edge into the target file or its symbols (or into
+  the target symbol); transitive = breadth-first closure over `file_deps`, cycle-safe; confidence is `exact` only
+  along an all-exact path. `dependencies(target, depth?)` is the forward equivalent.
+- `impact(target)` → `{direct, transitive, packages, crossPackage, tests{kind: "static", covered, uncovered,
+  targetCovered}, publishedApi, unresolvedImports, evidence[]}`. `unresolvedImports` lists unresolved import sites in
+  the target's package (they may hide dependents). The score below arrives with policy weights in M5.
+
+Later: `roles()`, `hotspots()`, `testsFor()`.
 - `roles()` → hub/core/leaf, from fan-in/out and centrality
 - `hotspots()` → ranked by fan-in x churn (git log) x uncovered-ness
 - `testsFor(node)`
@@ -266,9 +298,10 @@ Later views: session timeline/replay, run comparison (Claude Code vs Codex), hot
 ### 2.10 CLI (`packages/cli`)
 ```
 catenet init                 # create .catenet/, default policy (all rules record_only), install adapters (asks first)
-catenet index [--full]       # (re)build the graph
-catenet impact <path|symbol> # blast radius with evidence
-catenet deps|dependents <x>
+catenet index [--full]       # build or incrementally update the graph            (M1)
+catenet impact <target>      # blast radius with evidence                          (M1)
+catenet deps|dependents <target> [--depth N]                                       (M1)
+                             # all M1 commands: --repo <dir> (default git root, else cwd), --json
 catenet why <decision-id>
 catenet report [--session last]
 catenet guidance --write|--check

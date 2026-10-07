@@ -1,10 +1,13 @@
 {
-  "name": "@catenet/core",
+  "name": "@catenet/cli",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "Graph store, indexer, query engine, blast radius and policy engine.",
+  "description": "The catenet command-line interface.",
+  "bin": {
+    "catenet": "./dist/main.js"
+  },
   "exports": {
     ".": {
       "source": "./src/index.ts",
@@ -14,11 +17,9 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json",
-    "bench": "tsc -p tsconfig.build.json && node bench/bench.ts"
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@catenet/parsers": "workspace:*",
-    "smol-toml": "1.9.0"
+    "@catenet/core": "workspace:*"
   }
 }

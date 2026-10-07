@@ -17,6 +17,12 @@ a milestone needs an ADR or a ROADMAP change reviewed by the owner.
 - Cross-language edges.
 - Compiler-accurate references via SCIP indexers (scip-typescript, scip-python) as an optional accuracy boost on top of
   tree-sitter.
+- Method calls on class instances (`const w = new Widget(); w.render()` -> `Widget.render`). Needs type inference;
+  name-only matching would create false edges and gate noise. File-level dependency on the class is already captured
+  through the constructor call. Candidate implementation: SCIP or the TypeScript API once TS 7.1 ships one.
+- Implicit Python parent-package imports (`import a.b.c` also runs `a/__init__.py`, `a/b/__init__.py`). Real runtime
+  coupling, but counting it would make every package `__init__.py` a hub. If wanted, add it as a separate weak edge
+  kind that is excluded from blast-radius counts.
 
 ## Visualization
 - Run comparison UI (Claude Code vs Codex), session timeline / replay, memory view, hotspot treemap.

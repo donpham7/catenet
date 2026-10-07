@@ -10,7 +10,7 @@ fixtures/<name>/answer-key.json   expected results; lives outside repo/ so it is
 
 | Fixture | What it seeds |
 |---|---|
-| `ts-basic` | One published TS package: barrel `export *`, renamed re-export, tsconfig path alias, default / namespace / type-only imports, literal and template dynamic `import()`, cross-file inheritance, an import cycle, a side-effect import, CommonJS `require`, test files importing through the barrel, a third-party import. |
+| `ts-basic` | One published TS package: barrel `export *`, renamed re-export, tsconfig path alias, default / namespace / type-only imports, literal and template dynamic `import()`, cross-file inheritance, an import cycle, a side-effect import, CommonJS `require` and exports (`exports.x =`, `module.exports.x =`, `module.exports = function`/`{ ... }`, a required module called as its default export), test files importing through the barrel, a third-party import. |
 | `py-basic` | One published Python project: package `__init__` re-exports, relative (`.`/`..`) and absolute imports, `import x.y as m` attribute access, `from x import *` with `__all__`, import inside `try/except`, `importlib.import_module` with a literal (heuristic) and an f-string (unresolved), inheritance, `tests/test_*.py`. |
 | `monorepo-mixed` | pnpm workspace with two published packages (`@acme/utils`, `@acme/ui`), a private app (`web`) importing them by workspace name, a Python service with `pyproject.toml`, an unused export, an internal file, and protected-path candidates (`migrations/`, `.env.example`, `generated/`). |
 
@@ -20,7 +20,8 @@ fixtures/<name>/answer-key.json   expected results; lives outside repo/ so it is
   `imports | calls | references | inherits`. Test files are never dependents.
 - **Direct = 1 hop**, after resolving uses through re-exports: a file that calls `formatCurrency` imported from a
   barrel is a *direct* dependent of the file that defines it (and also depends on the barrel). Files that re-export a
-  symbol (barrels, `__init__.py`) are dependents of it.
+  symbol (barrels, `__init__.py`) are dependents of it, including through `export *` chains (`src/index.ts` re-exports
+  `round` from `lib/math.ts` via `export * from "./lib"`, so it is a direct dependent of `math.ts`).
 - **Transitive = all hops**, cycle-safe. The target is never its own dependent. `transitive` includes `direct`.
 - **Edges point to the module named in the import.** Implicit Python parent-package execution (importing `a.b.c` also
   runs `a/__init__.py` and `a/b/__init__.py`) is *not* an edge.
@@ -29,7 +30,8 @@ fixtures/<name>/answer-key.json   expected results; lives outside repo/ so it is
 - **Covered** (static coverage) lists the dependents that have an incoming `tests` edge (some test file imports or
   references them). `target_covered` says whether the target itself has one.
 - **`published_api`**: the target is exported from the entry point of a published package (ADR-0008).
-- **Externals:** `third_party` (declared dependency), `builtin` (language standard library or runtime built-ins, e.g.
+- **Externals** are listed by specifier as written, minus surrounding quotes/backticks and any Python string prefix
+  (`./${name}`, `pybasic.plugins.{name}`). Subkinds: `third_party` (declared dependency), `builtin` (language standard library or runtime built-ins, e.g.
   `importlib`, `node:fs`), `unresolved` (local-looking or dynamic specifier that cannot be resolved).
 
 ## Answer-key schema

@@ -1,6 +1,7 @@
 // Read-only queries over graph.db (ARCHITECTURE 2.3, ADR-0008). Every result carries the facts that justify it.
 import { posix } from "node:path";
 import type { Confidence } from "../model.js";
+import { SCHEMA_VERSION } from "../store/schema.js";
 import {
   type DependentRow,
   type EvidenceRow,
@@ -40,6 +41,14 @@ export interface Impact {
   /** Unresolved import sites in the target's package; any of them may hide dependents. */
   unresolvedImports: { from: string; specifier: string; lines: number[] }[];
   evidence: { file: string; edges: EvidenceRow[] }[];
+}
+
+export interface RepoMap {
+  packages: { path: string; name: string; published: boolean; files: number }[];
+  directories: { path: string; files: number }[];
+  entryPoints: { package: string; file: string }[];
+  hubs: { file: string; directDependents: number }[];
+  counts: { files: number; testFiles: number; symbols: number; externals: Record<string, number> };
 }
 
 export class TargetError extends Error {
@@ -212,6 +221,53 @@ export class Graph {
         file: d.file,
         edges: this.store.evidence(target.nodeIds, d.file).slice(0, 3),
       })),
+    };
+  }
+
+  /** Test files with a static `tests` edge to the target (ADR-0002: static, not runtime coverage). */
+  testsFor(spec: string): string[] {
+    return this.store.testsFor(this.resolveTarget(spec).nodeIds);
+  }
+
+  /** Compact orientation: packages, top-level directories, published entry points, hub files, counts. */
+  repoMap(opts: { hubs?: number; directories?: number } = {}): RepoMap {
+    const fileCounts = this.store.packageFileCounts();
+    const dirs = new Map<string, number>();
+    for (const path of this.store.allFilePaths()) {
+      const top = path.includes("/") ? (path.split("/")[0] as string) : ".";
+      dirs.set(top, (dirs.get(top) ?? 0) + 1);
+    }
+    const entries = this.store.getMeta("entry_points");
+    return {
+      packages: this.store.packages().map((p) => ({
+        path: p.path,
+        name: p.name,
+        published: p.published,
+        files: fileCounts.get(p.id) ?? 0,
+      })),
+      directories: [...dirs.entries()]
+        .map(([path, files]) => ({ path, files }))
+        .sort((a, b) => b.files - a.files || a.path.localeCompare(b.path))
+        .slice(0, opts.directories ?? 30),
+      entryPoints: entries ? (JSON.parse(entries) as RepoMap["entryPoints"]) : [],
+      hubs: this.store.hubs(opts.hubs ?? 10),
+      counts: this.store.counts(),
+    };
+  }
+
+  /** When and with which versions the graph was built. */
+  indexInfo(): {
+    indexedAt: string | null;
+    schemaVersion: number;
+    extractorVersion: number | null;
+    files: number;
+  } {
+    const extractor = this.store.getMeta("extractor_version");
+    return {
+      indexedAt: this.store.getMeta("indexed_at") ?? null,
+      schemaVersion: Number(this.store.getMeta("schema_version") ?? SCHEMA_VERSION),
+      extractorVersion: extractor === undefined ? null : Number(extractor),
+      files: this.store.counts().files,
     };
   }
 

@@ -10,7 +10,7 @@
   },
   "exports": {
     ".": {
-      "source": "./src/index.ts",
+      "@catenet/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }
@@ -20,6 +20,9 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@catenet/core": "workspace:*"
+    "@catenet/core": "workspace:*",
+    "@catenet/daemon": "workspace:*",
+    "@catenet/mcp": "workspace:*",
+    "@modelcontextprotocol/client": "2.3.0"
   }
 }

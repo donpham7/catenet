@@ -86,4 +86,7 @@ pnpm lint             # biome check (pnpm format to auto-fix)
 pnpm test             # vitest run
 pnpm --filter @catenet/core bench                     # M1 indexing benchmark (results: packages/core/bench/RESULTS.md)
 node packages/cli/dist/main.js index --repo <dir>     # after pnpm build; also deps|dependents|impact <target>
+node packages/cli/dist/main.js daemon start|stop|status --repo <dir>
+node packages/cli/dist/main.js doctor --repo <dir>
+claude mcp add catenet -- node <abs path>/packages/cli/dist/main.js mcp --repo <dir>   # use the MCP tools in Claude Code
 ```

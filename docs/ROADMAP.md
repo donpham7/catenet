@@ -35,11 +35,20 @@ ADRs record runtime/license/name decisions made with the owner.
 heuristic cases reported separately); single-file incremental reindex < 1 s on a 2k-file synthetic repo; heuristic edges are marked as such.
 
 ## M2. MCP server and daemon
+**Status:** done 2026-10-07, awaiting owner review. Daemon with watcher and clean restart, MCP server with 7
+read-only tools, `catenet doctor`; process-level tests in `packages/daemon`, `packages/mcp`, `packages/cli`; update
+path p50 120 ms after profiling-led speedups (`packages/core/bench/RESULTS.md`); ADR-0014. The query cache was not
+built: queries already take 20-50 ms (ADR-0014). End-to-end: headless Claude Code 2.1.287 connected to `catenet mcp` on
+fixtures/ts-basic, called `get_dependents` and `tests_for`, and answered with exactly the answer key's 8 direct / 3
+indirect dependents and the reaching test. (It also over-generalised that no dependent was tested, having skipped
+`impact_of`: evidence for M3's proactive context injection.)
+
 - Long-lived daemon (socket), file watcher, query cache.
 - MCP server with read-only tools (see ARCHITECTURE 2.7), bounded responses.
 - `catenet doctor`.
-- Make the update path cheaper for the watcher (deferred from the M1 review): compare import resolutions only where the
-  added/deleted paths could matter, and write `published_api` only for rows whose value changed.
+- Make the update path cheaper for the watcher (deferred from the M1 review). Done after profiling: `export *`
+  resolution pruning and changed-rows-only `published_api` writes; limiting the add/delete resolution comparison
+  (~28 ms) was measured and not worth it.
 
 **Acceptance:** Claude Code can connect to the MCP server and answer structural questions on fixtures; tool responses
 bounded and deterministic; daemon restarts cleanly; `doctor` reports healthy/unhealthy accurately.
@@ -83,6 +92,8 @@ behavior; every decision has evidence; false-positive rate measured with M4 and 
 - `catenet guidance --write` (root + optional per-directory), marker-based regeneration, token budget, diff preview.
 - `catenet guidance --check` for pre-commit/CI; stale claims reported with reasons.
 - `CLAUDE.md` import of generated file.
+- `get_hotspots` MCP tool and the `metrics` table (fan-in x git churn x untested), which the `hotspots` section needs
+  (moved from M2 by the owner, 2026-10-07).
 
 **Acceptance:** hand-written text outside markers is never modified (property tests); renaming/removing a referenced file in a fixture makes `--check` fail
 with the correct section named; generated file stays within budget; untrusted strings are escaped (injection test cases included).

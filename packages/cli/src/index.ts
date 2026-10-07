@@ -11,8 +11,12 @@ import {
   type Impact,
   indexRepo,
   openGraph,
+  sanitizeText,
   TargetError,
 } from "@catenet/core";
+import { daemonStatus, ensureDaemon, stopDaemon } from "@catenet/daemon";
+import { runStdioServer } from "@catenet/mcp";
+import { runDoctor } from "./doctor.js";
 
 export interface Io {
   out(line: string): void;
@@ -33,30 +37,15 @@ Usage:
   catenet deps <target> [--depth N]      what the target depends on
   catenet dependents <target> [--depth N]  what depends on the target
   catenet impact <target>                blast radius: dependents, packages, static test coverage, evidence
+  catenet daemon start|stop|status       the per-repo daemon that keeps the graph current
+  catenet mcp [--no-daemon]              MCP server over stdio (for Claude Code / Codex)
+  catenet doctor                         health report; exit 1 if anything is broken
 
 Targets: a file path (src/lib/format.ts), path#Symbol (src/lib/format.ts#formatCurrency) or a symbol name.
 Options: --repo <dir> (default: git root, else cwd), --json, --help`;
 
-/** Repo text is untrusted: strip control characters (including ANSI escapes) before printing it to a terminal. */
-// Built with fromCharCode so the source contains no literal control characters.
-const ch = (code: number) => String.fromCharCode(code);
-/** 7-bit (ESC [) and 8-bit (CSI, 0x9b) terminal control sequences. */
-const CONTROL_SEQUENCES = new RegExp(`(?:${ch(27)}\\[|${ch(0x9b)})[0-9;?]*[ -/]*[@-~]`, "g");
-/** C0 controls (including newline, carriage return and tab), DEL, C1 controls, and Unicode bidi overrides/isolates. */
-const UNSAFE_CHARS = new RegExp(
-  `[${ch(0)}-${ch(31)}${ch(0x7f)}-${ch(0x9f)}${ch(0x202a)}-${ch(0x202e)}${ch(0x2066)}-${ch(0x2069)}]`,
-  "g",
-);
-const MAX_FIELD = 300;
-
-/**
- * Repo text is untrusted (CLAUDE.md principle 5): strip anything that could move the cursor, recolor, reorder or
- * forge output lines, and cap the length, before printing a repo-derived string.
- */
-export const sanitize = (s: string): string => {
-  const clean = s.replace(CONTROL_SEQUENCES, "").replace(UNSAFE_CHARS, "");
-  return clean.length > MAX_FIELD ? `${clean.slice(0, MAX_FIELD - 1)}…` : clean;
-};
+/** Repo text is untrusted (CLAUDE.md principle 5): see sanitizeText in @catenet/core. */
+export const sanitize = (s: string): string => sanitizeText(s);
 
 /**
  * Turn a path target typed relative to the current directory (or absolute, or `./`-prefixed) into the repo-relative
@@ -148,6 +137,47 @@ function printImpact(io: Io, i: Impact): void {
   }
 }
 
+async function daemonCommand(io: Io, root: string, sub: string | undefined, json: boolean): Promise<number> {
+  if (sub === "start") {
+    const r = await ensureDaemon(root);
+    if (json) io.out(JSON.stringify(r, null, 2));
+    else if (r.status === "failed") io.err(`daemon failed to start: ${sanitize(r.error)}`);
+    else io.out(`daemon ${r.status} (pid ${r.health.pid}) for ${sanitize(root)}`);
+    return r.status === "failed" ? 1 : 0;
+  }
+  if (sub === "stop") {
+    const result = await stopDaemon(root);
+    if (json) io.out(JSON.stringify({ result }));
+    else
+      io.out(
+        result === "stopped"
+          ? "daemon stopped"
+          : result === "not-running"
+            ? "no daemon was running"
+            : "daemon did not stop",
+      );
+    return result === "still-running" ? 1 : 0;
+  }
+  if (sub === "status") {
+    const s = await daemonStatus(root);
+    if (json) io.out(JSON.stringify(s, null, 2));
+    else if (!s.health) io.out("daemon not running");
+    else {
+      const last = s.health.lastIndex;
+      io.out(
+        `daemon running: pid ${s.health.pid}, ${s.health.watching ? "watching" : "not watching yet"}, since ${s.health.startedAt}`,
+      );
+      if (last)
+        io.out(
+          `last index: ${last.at} (${last.mode}, ${last.ms} ms${last.error ? `, error: ${sanitize(last.error)}` : ""})`,
+        );
+    }
+    return 0;
+  }
+  io.err("usage: catenet daemon start|stop|status");
+  return 1;
+}
+
 export async function main(argv: string[], io: Io = defaultIo): Promise<number> {
   let parsed: ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true }>>;
   const OPTIONS = {
@@ -156,6 +186,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
     json: { type: "boolean" },
     depth: { type: "string" },
     help: { type: "boolean", short: "h" },
+    "no-daemon": { type: "boolean" },
   } as const;
   try {
     parsed = parseArgs({ args: argv, options: OPTIONS, allowPositionals: true });
@@ -176,6 +207,25 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
   if (depth !== undefined && (!Number.isInteger(depth) || depth < 1)) {
     io.err("--depth must be a positive integer");
     return 1;
+  }
+
+  if (command === "mcp") {
+    // stdout carries JSON-RPC from here on: nothing else may print to it.
+    await runStdioServer({ root, daemon: values["no-daemon"] !== true });
+    return 0;
+  }
+
+  if (command === "daemon") return daemonCommand(io, root, target, values.json === true);
+
+  if (command === "doctor") {
+    const report = await runDoctor(root);
+    if (values.json) io.out(JSON.stringify(report, null, 2));
+    else {
+      const icon = { ok: "ok  ", warn: "warn", fail: "FAIL" } as const;
+      for (const c of report.checks) io.out(`${icon[c.status]}  ${c.name}: ${sanitize(c.detail)}`);
+      io.out(report.healthy ? "healthy" : "unhealthy");
+    }
+    return report.healthy ? 0 : 1;
   }
 
   if (command === "index") {

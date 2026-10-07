@@ -240,22 +240,25 @@ Adapter constraints: tiny, no business logic, never throw to the agent, honor fa
 both agents' caps. The command client is plain JS on `node:net` with a 250 ms hard timeout (S4: 47 ms p95).
 
 ### 2.7 MCP server (`packages/mcp`)
-Read-only tools, built on `@modelcontextprotocol/server` v2 (ADR-0009). Stdio transport first; stdout is reserved
-for JSON-RPC, so all logging goes to stderr. Keep tool descriptions precise (models choose tools from them) and responses compact
-(bounded size, with `truncated: true` plus a hint to narrow the query).
+Read-only tools, built on `@modelcontextprotocol/server` v2 (ADR-0009), run as `catenet mcp` (stdio; stdout is
+reserved for JSON-RPC, so all logging goes to stderr). The server **reads `graph.db` directly** (WAL allows concurrent
+readers) and starts the repo's daemon (2.12) so the graph stays current; if the daemon is down, tools still answer from
+the last index (ADR-0014). Every response is JSON data, never prose: sanitised (`sanitizeText`), deterministic in order,
+bounded (default limits, hard maximum 200, `truncated: true` plus a hint), and stamped with
+`freshness: {indexedAt, daemon}`. Tool descriptions are precise because models choose tools from them.
 
-| Tool | Purpose |
-|---|---|
-| `find_symbol` | Locate definitions by name/pattern |
-| `get_dependents` | Who depends on this file/symbol (depth, kinds) |
-| `get_dependencies` | What this file/symbol depends on |
-| `impact_of` | Blast radius summary with evidence |
-| `get_hotspots` | Risky areas of the repo |
-| `tests_for` | Tests covering a file/symbol |
-| `repo_map` | Compact map of packages, top-level directories and entry points |
-| `why` | Explain a past gate decision by id |
-| `session_summary` | What happened in the current/last session |
-| `rescan` | Trigger incremental/full reindex (the only side-effecting tool; affects only derived data) |
+| Tool | Purpose | Status |
+|---|---|---|
+| `find_symbol` | Locate definitions by exact name or `Class.method` | M2 |
+| `get_dependents` | Who depends on this file/symbol: direct and indirect files (depth, limit) | M2 |
+| `get_dependencies` | What this file/symbol depends on | M2 |
+| `impact_of` | Blast radius with evidence, static tests, published API, unresolved imports | M2 |
+| `tests_for` | Test files that statically reach a file/symbol | M2 |
+| `repo_map` | Packages, top-level directories, published entry points, hub files, counts | M2 |
+| `rescan` | Incremental or full reindex via the daemon (in-process fallback); changes only derived data | M2 |
+| `get_hotspots` | Risky areas (fan-in x churn x untested) | M6 |
+| `why` | Explain a past gate decision by id | M5 |
+| `session_summary` | What happened in the current/last session | M3 |
 
 Later (M9): `remember`, `recall`, `stale_report`.
 
@@ -305,10 +308,33 @@ catenet deps|dependents <target> [--depth N]                                    
 catenet why <decision-id>
 catenet report [--session last]
 catenet guidance --write|--check
+catenet daemon start|stop|status                                                    (M2)
+catenet mcp [--no-daemon]    # MCP server over stdio                                (M2)
+catenet doctor [--json]      # node, graph versions, freshness, daemon, MCP handshake; exit 1 if unhealthy  (M2)
 catenet ui                   # open the visualization
-catenet doctor               # daemon health, hook install state, schema versions, latency probe
 catenet eval ...             # run the benchmark harness
 ```
+
+### 2.12 Daemon (`packages/daemon`), M2
+One long-lived process per repository, and the graph's only long-lived writer (ADR-0014).
+- **Location:** an HTTP server on a unix socket in `$XDG_RUNTIME_DIR/catenet` or `~/.cache/catenet/run` (directory
+  0700, so only the user can connect), named `catenet-<hash of repo path>.sock` (Windows: a named pipe, untested).
+  State in `<repo>/.catenet/daemon.json`, log in `<repo>/.catenet/daemon.log`.
+- **API:** `GET /health` (version, build id, pid, watching, last index and its error), `POST /index` (`{full}`),
+  `POST /shutdown`. M3 adds the hook endpoint and a token-protected loopback TCP listener (ADR-0012).
+- **Freshness:** a chokidar watcher that skips ignored directories signals changes, and only changes to files that can
+  affect the graph count (code, manifests, tsconfig, JSON/TOML config, removed directories); logs and caches don't.
+  Runs are debounced (200 ms) and serialised; changes during a run trigger exactly one follow-up run. Indexing runs in
+  a **worker thread**, so the socket answers within milliseconds even mid-index (required for M3's hook path).
+- **Lifecycle:** `ensureDaemon` reuses a daemon with the same build id, replaces one from another build (and reports
+  failure, not success, if the old one won't exit), cleans up a stale socket or dead pid (crash, `kill -9`), and
+  spawns a detached one otherwise; it never throws to callers. A process is only ever signalled after its command line
+  proves it is our daemon for this repo (a stale pid may belong to an unrelated process). The MCP server calls
+  `ensureDaemon` at start and heartbeats every 5 minutes. A daemon exits after 60 idle minutes.
+- **Socket ownership:** each daemon binds a private path and renames it onto the shared one (Node deletes a unix socket
+  by path when its server closes, so an exiting old daemon could otherwise delete a newer one's socket); the loser of
+  a start race exits. Clients never pool connections (`agent: false`), so a request always reaches the current owner.
+- **Failure:** an index error is logged and reported by `/health` and `catenet doctor`; the daemon keeps serving.
 
 ### 2.11 Spec layer (declared intent), M6A/M6B
 Detailed in `docs/SPEC_LAYER.md`. Summary: the indexer also reads spec files (components, architecture rules, requirements, ADRs) and derives

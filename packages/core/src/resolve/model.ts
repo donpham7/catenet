@@ -30,6 +30,8 @@ export class RepoModel {
   readonly py: PyResolver;
   private readonly importCache = new Map<string, ResolvedImport[]>();
   private readonly nameCache = new Map<string, Target | null>();
+  private readonly exportCache = new Map<string, string[]>();
+  private readonly exportSets = new Map<string, Set<string>>();
 
   constructor(
     readonly files: Map<string, FileRecord>,
@@ -116,6 +118,9 @@ export class RepoModel {
     if (name === "default") return null;
     for (const imp of imports) {
       if (imp.fact.kind !== "reexport_all" || imp.resolution.kind !== "file") continue;
+      // Skip modules that certainly don't export the name (only when their export set is complete, i.e. cached).
+      const known = this.exportSets.get(imp.resolution.path);
+      if (known && !known.has(name)) continue;
       const hit = this.resolveName(imp.resolution.path, name, visiting);
       if (hit) return hit;
     }
@@ -162,22 +167,41 @@ export class RepoModel {
   }
 
   /** Every name a TS module exports, including through `export *` chains (excluding `default` from those). */
-  exportedNames(path: string, seen = new Set<string>()): string[] {
-    if (seen.has(path)) return [];
-    seen.add(path);
+  exportedNames(path: string): string[] {
+    return this.collectExportedNames(path, new Set()).names;
+  }
+
+  /**
+   * Memoised per model (publishing walks the same barrels many times). `stack` holds only the current DFS path, so
+   * shared sub-barrels are fully counted; a result that hit an `export *` cycle is partial and is not cached.
+   */
+  private collectExportedNames(path: string, stack: Set<string>): { names: string[]; complete: boolean } {
+    const cached = this.exportCache.get(path);
+    if (cached) return { names: cached, complete: true };
+    if (stack.has(path)) return { names: [], complete: false };
     const facts = this.files.get(path)?.facts;
-    if (!facts) return [];
-    if (this.isPython(path)) return this.starNames(path);
+    if (!facts) return { names: [], complete: true };
+    if (this.isPython(path)) return { names: this.starNames(path), complete: true };
+    stack.add(path);
+    let complete = true;
     const names = new Set<string>();
     for (const s of facts.symbols) for (const n of s.exportNames) names.add(n);
     for (const le of facts.localExports) names.add(le.exported);
     for (const imp of this.imports(path)) {
       if (imp.fact.kind === "reexport") for (const b of imp.fact.bindings) names.add(b.local);
       if (imp.fact.kind === "reexport_all" && imp.resolution.kind === "file") {
-        for (const n of this.exportedNames(imp.resolution.path, seen)) if (n !== "default") names.add(n);
+        const inner = this.collectExportedNames(imp.resolution.path, stack);
+        if (!inner.complete) complete = false;
+        for (const n of inner.names) if (n !== "default") names.add(n);
       }
     }
-    return [...names].sort();
+    stack.delete(path);
+    const result = [...names].sort();
+    if (complete) {
+      this.exportCache.set(path, result);
+      this.exportSets.set(path, new Set(result));
+    }
+    return { names: result, complete };
   }
 
   /** All edges whose source is this file or one of its symbols (`contains` edges are written by the indexer). */
@@ -315,7 +339,7 @@ export class RepoModel {
   }
 
   /** Symbols (and the files that define them) reachable from published packages' entry points (ADR-0008). */
-  publishedApi(): { symbols: NodeKey[]; files: Set<string> } {
+  publishedApi(): { symbols: NodeKey[]; files: Set<string>; entries: { package: string; file: string }[] } {
     const symbols = new Map<string, NodeKey>();
     const files = new Set<string>();
     const markModule = (path: string, seen: Set<string>) => {
@@ -330,11 +354,16 @@ export class RepoModel {
       symbols.set(`${t.path}#${t.name}#${t.subkind}`, key);
       files.add(t.path);
     };
+    const entries: { package: string; file: string }[] = [];
     for (const pkg of this.packages) {
       if (!pkg.published) continue;
-      for (const entry of this.entryFiles(pkg)) markModule(entry, new Set());
+      for (const entry of this.entryFiles(pkg)) {
+        entries.push({ package: pkg.name, file: entry });
+        markModule(entry, new Set());
+      }
     }
-    return { symbols: [...symbols.values()], files };
+    entries.sort((a, b) => a.package.localeCompare(b.package) || a.file.localeCompare(b.file));
+    return { symbols: [...symbols.values()], files, entries };
   }
 
   private entryFiles(pkg: PackageInfo): string[] {

@@ -12,7 +12,26 @@ Recorded 2026-10-07 on an Apple M1 Pro, macOS 26.5.1, Node v24.21.0. Reproduce w
 - Each TS file imports 4 others, skewed toward low-numbered modules so a few files become hubs. Imports mix relative
   paths, barrels and a tsconfig alias. Files also have type-only imports and cross-file class inheritance.
 
-## Results
+## Results (current: after the M2 update-path speedups, 2026-10-07)
+
+| case | mode | n | p50 ms | p95 ms | max ms |
+|---|---|---|---|---|---|
+| full index (cold, empty db) | rebuild | 1 | 1490 | 1490 | 1490 |
+| no change | noop | 10 | 80 | 97 | 97 |
+| body edit (no export change) | update | 10 | 120 | 129 | 129 |
+| rename an export in a hub file | update | 10 | 203 | 335 | 335 |
+| add a file | update | 3 | 143 | 147 | 147 |
+| delete a file | update | 3 | 140 | 143 | 143 |
+| dependents query, hub file (~1808 transitive) | query | 50 | 19 | 21 | 23 |
+| impact query, hub file | query | 20 | 38 | 49 | 49 |
+
+What changed (profiled first, on this repo): the published-API pass resolved every exported name through every
+`export *` branch (76 ms per update); resolution now skips modules whose cached export set lacks the name (17 ms), and
+`published_api` is written only for rows that change. The review's other suggestion, limiting the old-vs-new import
+resolution comparison on add/delete, was measured at ~28 ms and left as is. Remaining fixed cost per run: ~30 ms
+`git ls-files` and ~40-65 ms hashing every file, which a watcher-supplied change list could remove (not needed yet).
+
+## Results (M1, before the speedups)
 
 | case | mode | n | p50 ms | p95 ms | max ms |
 |---|---|---|---|---|---|

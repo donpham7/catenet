@@ -44,7 +44,7 @@ for (const name of readdirSync(FIXTURES, { withFileTypes: true })
     });
     afterAll(() => {
       graph?.close();
-      rmSync(tmp, { recursive: true, force: true });
+      rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     });
 
     it("discovers the packages", () => {

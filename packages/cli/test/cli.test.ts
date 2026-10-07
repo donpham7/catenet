@@ -1,6 +1,7 @@
 import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Io, main, sanitize } from "../src/index.js";
 
@@ -16,14 +17,15 @@ function runIn(cwd: string, ...argv: string[]): { code: Promise<number>; out: st
   const out: string[] = [];
   const err: string[] = [];
   const io: Io = { out: (l) => out.push(l), err: (l) => err.push(l), cwd };
-  return { code: main([...argv, "--repo", repo], io), out, err };
+  const args = argv.includes("--repo") ? argv : [...argv, "--repo", repo];
+  return { code: main(args, io), out, err };
 }
 
 beforeAll(() => {
   // Skip any local index someone created by running the CLI on the fixture.
   cpSync(FIXTURE, repo, { recursive: true, filter: (src) => !src.split(/[\\/]/).includes(".catenet") });
 });
-afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+afterAll(() => rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 
 describe("catenet CLI", () => {
   it("asks for an index before queries", async () => {
@@ -107,6 +109,60 @@ describe("catenet CLI", () => {
 
   it("rejects unknown commands", async () => {
     expect(await run("frobnicate").code).toBe(1);
+  });
+});
+
+describe("catenet doctor and daemon", () => {
+  it("doctor is healthy on an indexed repo without a daemon (daemon down is a warning)", async () => {
+    const r = run("doctor", "--json");
+    expect(await r.code).toBe(0);
+    const report = JSON.parse(r.out.join("\n")) as {
+      healthy: boolean;
+      checks: { name: string; status: string }[];
+    };
+    expect(report.healthy).toBe(true);
+    const by = Object.fromEntries(report.checks.map((c) => [c.name, c.status]));
+    expect(by).toMatchObject({ node: "ok", graph: "ok", daemon: "warn", mcp: "ok" });
+  });
+
+  it("doctor fails without a graph and when the graph was built by another extractor version", async () => {
+    const empty = join(tmp, "empty");
+    cpSync(FIXTURE, empty, { recursive: true, filter: (src) => !src.split(/[\\/]/).includes(".catenet") });
+    const none = runIn(tmp, "doctor", "--repo", empty);
+    expect(await none.code).toBe(1);
+    expect(none.out.join("\n")).toMatch(/FAIL {2}graph: no graph yet/);
+    await runIn(tmp, "index", "--repo", empty).code;
+    const db = new DatabaseSync(join(empty, ".catenet/graph.db"));
+    db.prepare("UPDATE meta SET value = '0' WHERE key = 'extractor_version'").run();
+    db.close();
+    const stale = runIn(tmp, "doctor", "--repo", empty);
+    expect(await stale.code).toBe(1);
+    expect(stale.out.join("\n")).toContain("built by extractor v0");
+  });
+
+  it("daemon start, status and stop", async () => {
+    process.env.CATENET_RUNTIME_DIR = join(tmp, "run");
+    try {
+      const started = run("daemon", "start");
+      expect(await started.code).toBe(0);
+      expect(started.out[0]).toMatch(/^daemon (started|running) \(pid \d+\)/);
+      const status = run("daemon", "status");
+      expect(await status.code).toBe(0);
+      expect(status.out[0]).toMatch(/^daemon running: pid \d+/);
+      const healthy = run("doctor", "--json");
+      expect(await healthy.code).toBe(0);
+      const stop = run("daemon", "stop");
+      expect(await stop.code).toBe(0);
+      expect(stop.out[0]).toBe("daemon stopped");
+      const after = run("daemon", "status");
+      await after.code;
+      expect(after.out[0]).toBe("daemon not running");
+      const again = run("daemon", "stop");
+      await again.code;
+      expect(again.out[0]).toBe("no daemon was running"); // M2 review #8
+    } finally {
+      delete process.env.CATENET_RUNTIME_DIR;
+    }
   });
 });
 

@@ -28,6 +28,6 @@ export function makeRepo(files: Record<string, string>): TempRepo {
     graph: () => openGraph(dbPath),
     index: (full = false) => indexRepo({ root, dbPath, full }),
     write,
-    cleanup: () => rmSync(tmp, { recursive: true, force: true }),
+    cleanup: () => rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
   };
 }

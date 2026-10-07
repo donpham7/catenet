@@ -1,8 +1,9 @@
 // Regression tests for the M1 code review findings. Each test failed before its fix.
 import { spawn } from "node:child_process";
+import { chmodSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
-import { TargetError } from "../src/index.js";
+import { pendingChanges, TargetError } from "../src/index.js";
 import { makeRepo, type TempRepo } from "./helpers.js";
 
 let repo: TempRepo | undefined;
@@ -289,5 +290,40 @@ describe("a no-change run returns before reading stored facts (review 2 #9)", ()
     const stats = await repo.index();
     expect(stats.mode).toBe("noop");
     expect(stats.extracted).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------- M2 review
+
+describe("graphs missing M2 metadata are backfilled on the next run (M2 review #9)", () => {
+  it("does not take the no-change shortcut when indexed_at or entry_points are missing", async () => {
+    repo = makeRepo({
+      "package.json": JSON.stringify({ name: "lib", exports: { ".": "./src/index.ts" } }),
+      "src/index.ts": "export const a = 1;\n",
+    });
+    await repo.index(true);
+    const db = new DatabaseSync(repo.dbPath);
+    db.prepare("DELETE FROM meta WHERE key IN ('indexed_at', 'entry_points')").run();
+    db.close();
+    const stats = await repo.index();
+    expect(stats.mode).not.toBe("noop");
+    const g = repo.graph();
+    expect(g.repoMap().entryPoints).toEqual([{ package: "lib", file: "src/index.ts" }]);
+    expect(g.indexInfo().indexedAt).not.toBeNull();
+    g.close();
+  });
+});
+
+describe("pendingChanges never throws on unreadable files (M2 review #10)", () => {
+  it("counts an unreadable file as changed", async () => {
+    repo = makeRepo({ "src/a.ts": "export const a = 1;\n", "src/b.ts": "export const b = 1;\n" });
+    await repo.index(true);
+    const path = `${repo.root}/src/b.ts`;
+    chmodSync(path, 0o000);
+    try {
+      expect(pendingChanges(repo.root, repo.dbPath)).toEqual({ changed: 1, added: 0, deleted: 0 });
+    } finally {
+      chmodSync(path, 0o644);
+    }
   });
 });

@@ -1,10 +1,10 @@
 {
-  "name": "@catenet/parsers",
+  "name": "@catenet/mcp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "Tree-sitter extraction: source text to FileFacts. Pure: no filesystem access, no resolution.",
+  "description": "MCP server with read-only graph tools (stdio).",
   "exports": {
     ".": {
       "@catenet/source": "./src/index.ts",
@@ -17,9 +17,12 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "tree-sitter-javascript": "0.25.0",
-    "tree-sitter-python": "0.25.0",
-    "tree-sitter-typescript": "0.23.2",
-    "web-tree-sitter": "0.27.0"
+    "@catenet/core": "workspace:*",
+    "@catenet/daemon": "workspace:*",
+    "@modelcontextprotocol/server": "2.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.3.0"
   }
 }

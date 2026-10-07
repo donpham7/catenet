@@ -5,7 +5,7 @@ If you change a `.mermaid` file, regenerate this page or update the matching blo
 
 ## System overview
 
-Agents talk to thin adapters (hooks) and to the MCP server. All logic lives in one local daemon over two SQLite stores. The repository, including spec files, policy and AGENTS.md, is the only thing humans edit.
+Agents talk to thin adapters (hooks) and to the MCP server. The MCP server reads graph.db directly; the per-repo daemon is the graph's writer and holds the hook-path logic, over two SQLite stores. The repository, including spec files, policy and AGENTS.md, is the only thing humans edit.
 
 ```mermaid
 flowchart TB
@@ -19,7 +19,7 @@ flowchart TB
     ACX["codex adapter<br/>hooks config"]
   end
 
-  MCP["MCP server<br/>read-only tools"]
+  MCP["MCP server<br/>read-only tools<br/>(catenet mcp)"]
 
   subgraph Daemon["Catenet daemon (local, long-lived)"]
     API["Local API<br/>unix socket"]
@@ -53,7 +53,7 @@ flowchart TB
 
   ACC -- "events / decisions" --> API
   ACX -- "events / decisions" --> API
-  MCP --> QE
+  MCP -- "reads (WAL), starts daemon" --> GDB
 
   API --> POL
   API --> REC

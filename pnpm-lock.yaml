@@ -184,6 +184,15 @@ importers:
       '@catenet/core':
         specifier: workspace:*
         version: link:../core
+      '@catenet/daemon':
+        specifier: workspace:*
+        version: link:../daemon
+      '@catenet/mcp':
+        specifier: workspace:*
+        version: link:../mcp
+      '@modelcontextprotocol/client':
+        specifier: 2.3.0
+        version: 2.3.0
 
   packages/core:
     dependencies:
@@ -193,6 +202,34 @@ importers:
       smol-toml:
         specifier: 1.9.0
         version: 1.9.0
+
+  packages/daemon:
+    dependencies:
+      '@catenet/core':
+        specifier: workspace:*
+        version: link:../core
+      chokidar:
+        specifier: 5.0.0
+        version: 5.0.0
+
+  packages/mcp:
+    dependencies:
+      '@catenet/core':
+        specifier: workspace:*
+        version: link:../core
+      '@catenet/daemon':
+        specifier: workspace:*
+        version: link:../daemon
+      '@modelcontextprotocol/server':
+        specifier: 2.3.0
+        version: 2.3.0
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@modelcontextprotocol/client':
+        specifier: 2.3.0
+        version: 2.3.0
 
   packages/parsers:
     dependencies:
@@ -584,6 +621,10 @@ packages:
     resolution: {integrity: sha512-XWAtwJ6OHO+tj0EKCs0Y2UamnyOxseZWltU4x2U2wh8g4AigdjwvtUjvLP2tqkA/avxHEtzxNaqGq/YGNwckKg==}
     engines: {node: '>=18'}
 
+  chokidar@5.0.0:
+    resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
+    engines: {node: '>= 20.19.0'}
+
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
@@ -742,6 +783,10 @@ packages:
   postcss@8.5.28:
     resolution: {integrity: sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A==}
     engines: {node: ^10 || ^12 || >=14}
+
+  readdirp@5.1.1:
+    resolution: {integrity: sha512-Kko+Y5XQ6fM+Ce3dq3m9YGxnacYZYl9cA1wZjaF3Vbry2L3i1qVg8+CAgNPsXRArPMUMCaOR7oa9Nqntc43JKA==}
+    engines: {node: '>= 20.19.0'}
 
   rolldown@1.2.12:
     resolution: {integrity: sha512-8wafseiaG80xmXSfqidUNqZcylTlhmPZZt+za2m+js2sFZ8dTNlhIOV2WcbIPx2hgwPBJpEUGFAMZ9bgBBLTSQ==}
@@ -1129,6 +1174,10 @@ snapshots:
 
   chai@6.3.0: {}
 
+  chokidar@5.0.0:
+    dependencies:
+      readdirp: 5.1.1
+
   cross-spawn@7.0.6:
     dependencies:
       path-key: 3.1.1
@@ -1236,6 +1285,8 @@ snapshots:
       nanoid: 3.3.19
       picocolors: 1.1.1
       source-map-js: 1.2.2
+
+  readdirp@5.1.1: {}
 
   rolldown@1.2.12:
     dependencies:

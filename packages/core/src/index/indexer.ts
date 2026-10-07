@@ -7,7 +7,7 @@
 //   differs between the old and new file sets, and the importers of any file whose export surface changed
 //   (following files that re-expose those names).
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import { EXTRACTOR_VERSION, type FileFacts, langForPath, loadExtractor } from "@catenet/parsers";
 import { isTestFile, listRepoFiles } from "../discover/files.js";
@@ -41,7 +41,48 @@ const isConfig = (path: string) =>
   CONFIG_FILES.has(posix.basename(path)) || /(^|\/)tsconfig\.[^/]*\.json$/.test(path);
 const sha = (data: string | Buffer) => createHash("sha256").update(data).digest("hex").slice(0, 20);
 
+/** Whether a change to this repo-relative path can change the graph (code, manifests, tsconfig and JSON/TOML config). */
+export const affectsGraph = (path: string): boolean =>
+  langForPath(path) !== null || isConfig(path) || path.endsWith(".json") || path.endsWith(".toml");
+
 export const defaultDbPath = (root: string) => join(root, ".catenet", "graph.db");
+
+/**
+ * Read-only: how the repository differs from the last index (code files only). Null when there is no graph yet.
+ * Used by `catenet doctor`; never writes.
+ */
+export function pendingChanges(
+  root: string,
+  dbPath = defaultDbPath(root),
+): { changed: number; added: number; deleted: number } | null {
+  if (!existsSync(dbPath)) return null;
+  const store = new SqliteGraphStore(dbPath);
+  try {
+    const prior = store.loadFacts();
+    const codePaths = listRepoFiles(root).filter((p) => langForPath(p) !== null);
+    let changed = 0;
+    let added = 0;
+    for (const path of codePaths) {
+      const cached = prior.get(path);
+      if (!cached) {
+        added++;
+        continue;
+      }
+      let hash: string | null;
+      try {
+        hash = sha(readFileSync(join(root, path), "utf8"));
+      } catch {
+        hash = null; // unreadable or deleted mid-check: the next index will notice, so report it as changed
+      }
+      if (hash !== cached.hash) changed++;
+    }
+    const present = new Set(codePaths);
+    const deleted = [...prior.keys()].filter((p) => !present.has(p)).length;
+    return { changed, added, deleted };
+  } finally {
+    store.close();
+  }
+}
 
 export async function indexRepo(opts: IndexOptions): Promise<IndexStats> {
   const started = performance.now();
@@ -71,6 +112,8 @@ export async function indexRepo(opts: IndexOptions): Promise<IndexStats> {
     const unchangedRepo =
       reuseFacts &&
       !configChanged &&
+      store.getMeta("indexed_at") !== undefined &&
+      store.getMeta("entry_points") !== undefined &&
       prior.size === codePaths.length &&
       codePaths.every((p) => prior.get(p)?.hash === sources.get(p)?.hash);
     if (unchangedRepo) {
@@ -117,7 +160,10 @@ export async function indexRepo(opts: IndexOptions): Promise<IndexStats> {
     const packages = discoverPackages(root, allPaths);
     const model = new RepoModel(files, packages, new Set(allPaths), root);
 
-    const rebuild = opts.full === true || prior.size === 0 || configChanged || !reuseFacts;
+    // Graphs written before M2 lack this metadata; rebuilding once backfills it (M2 review #9).
+    const missingMeta =
+      store.getMeta("indexed_at") === undefined || store.getMeta("entry_points") === undefined;
+    const rebuild = opts.full === true || prior.size === 0 || configChanged || !reuseFacts || missingMeta;
     const touched = changed.length + added.length + deleted.length > 0;
     let resolvedCount = 0;
 
@@ -288,7 +334,9 @@ function writeEdges(store: SqliteGraphStore, model: RepoModel, path: string): vo
 }
 
 function writePublished(store: SqliteGraphStore, model: RepoModel): void {
-  const { symbols, files } = model.publishedApi();
+  const { symbols, files, entries } = model.publishedApi();
+  store.setMeta("entry_points", JSON.stringify(entries));
+  store.setMeta("indexed_at", new Date().toISOString());
   const ids = new Set<number>();
   for (const key of symbols) {
     const id = store.nodeId(key);

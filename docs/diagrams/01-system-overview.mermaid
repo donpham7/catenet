@@ -9,7 +9,7 @@ flowchart TB
     ACX["codex adapter<br/>hooks config"]
   end
 
-  MCP["MCP server<br/>read-only tools"]
+  MCP["MCP server<br/>read-only tools<br/>(catenet mcp)"]
 
   subgraph Daemon["Catenet daemon (local, long-lived)"]
     API["Local API<br/>unix socket"]
@@ -43,7 +43,7 @@ flowchart TB
 
   ACC -- "events / decisions" --> API
   ACX -- "events / decisions" --> API
-  MCP --> QE
+  MCP -- "reads (WAL), starts daemon" --> GDB
 
   API --> POL
   API --> REC

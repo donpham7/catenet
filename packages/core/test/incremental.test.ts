@@ -139,7 +139,7 @@ const SCENARIOS: Record<string, Step[]> = {
 
 const temps: string[] = [];
 afterAll(() => {
-  for (const t of temps) rmSync(t, { recursive: true, force: true });
+  for (const t of temps) rmSync(t, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 for (const [fixture, steps] of Object.entries(SCENARIOS)) {

@@ -7,7 +7,7 @@
   "description": "Graph store, indexer, query engine, blast radius and policy engine.",
   "exports": {
     ".": {
-      "source": "./src/index.ts",
+      "@catenet/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     }

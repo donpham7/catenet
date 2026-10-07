@@ -344,13 +344,19 @@ export class SqliteGraphStore {
 
   /** Set `published_api` on every file and symbol: true for the given ids, false for all others. */
   setPublished(ids: Set<number>): void {
-    this.db.exec(
-      "UPDATE nodes SET attrs = json_set(coalesce(attrs, '{}'), '$.published_api', json('false')) WHERE kind IN ('file', 'symbol')",
-    );
-    const set = this.stmt(
-      "UPDATE nodes SET attrs = json_set(coalesce(attrs, '{}'), '$.published_api', json('true')) WHERE id = ?",
-    );
-    for (const id of ids) set.run(id);
+    // Write only rows whose value changes (or was never set, e.g. a row just re-upserted with fresh attrs).
+    const rows = this.stmt(
+      "SELECT id, json_extract(attrs, '$.published_api') AS p FROM nodes WHERE kind IN ('file', 'symbol')",
+    ).all() as { id: number; p: number | null }[];
+    const setTo = (value: boolean) =>
+      this.stmt(
+        `UPDATE nodes SET attrs = json_set(coalesce(attrs, '{}'), '$.published_api', json('${value}')) WHERE id = ?`,
+      );
+    for (const r of rows) {
+      const want = ids.has(r.id);
+      const have = r.p === 1 ? true : r.p === 0 ? false : null;
+      if (have !== want) setTo(want).run(r.id);
+    }
   }
 
   // ---------------------------------------------------------------- queries
@@ -439,6 +445,56 @@ export class SqliteGraphStore {
       attrs: string | null;
     }[];
     return rows.map((r) => ({ ...r, lines: (parse(r.attrs).lines as number[] | undefined) ?? [] }));
+  }
+
+  /** Test files with a `tests` edge into any of the target nodes. */
+  testsFor(targetIds: number[]): string[] {
+    if (targetIds.length === 0) return [];
+    const marks = targetIds.map(() => "?").join(",");
+    return (
+      this.db
+        .prepare(
+          `SELECT DISTINCT s.path AS path FROM edges e JOIN nodes s ON s.id = e.src
+           WHERE e.kind = 'tests' AND e.dst IN (${marks}) ORDER BY s.path`,
+        )
+        .all(...targetIds) as { path: string }[]
+    ).map((r) => r.path);
+  }
+
+  /** Files with the most direct dependent files. */
+  hubs(limit: number): { file: string; directDependents: number }[] {
+    return this.stmt(
+      `SELECT d.path AS file, COUNT(*) AS directDependents FROM file_deps fd JOIN nodes d ON d.id = fd.dst_file
+       GROUP BY fd.dst_file ORDER BY directDependents DESC, d.path LIMIT ?`,
+    ).all(limit) as { file: string; directDependents: number }[];
+  }
+
+  packageFileCounts(): Map<number, number> {
+    const rows = this.stmt(
+      `SELECT e.src AS pkg, COUNT(*) AS n FROM edges e JOIN nodes p ON p.id = e.src JOIN nodes f ON f.id = e.dst
+       WHERE e.kind = 'contains' AND p.kind = 'package' AND f.kind = 'file' GROUP BY e.src`,
+    ).all() as { pkg: number; n: number }[];
+    return new Map(rows.map((r) => [r.pkg, r.n]));
+  }
+
+  counts(): { files: number; testFiles: number; symbols: number; externals: Record<string, number> } {
+    const one = (sql: string) => (this.stmt(sql).get() as { n: number }).n;
+    const externals = Object.fromEntries(
+      (
+        this.stmt(
+          "SELECT subkind, COUNT(*) AS n FROM nodes WHERE kind = 'external' GROUP BY subkind ORDER BY subkind",
+        ).all() as {
+          subkind: string;
+          n: number;
+        }[]
+      ).map((r) => [r.subkind, r.n]),
+    );
+    return {
+      files: one("SELECT COUNT(*) AS n FROM nodes WHERE kind = 'file'"),
+      testFiles: one("SELECT COUNT(*) AS n FROM nodes WHERE kind = 'file' AND subkind = 'test'"),
+      symbols: one("SELECT COUNT(*) AS n FROM nodes WHERE kind = 'symbol'"),
+      externals,
+    };
   }
 
   packages(): { id: number; path: string; name: string; published: boolean }[] {

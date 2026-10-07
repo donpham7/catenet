@@ -1,0 +1,22 @@
+{
+  "name": "@catenet/adapter-claude-code",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Claude Code hook adapter: payload translation, responses, and the standalone hook client (ADR-0015).",
+  "exports": {
+    ".": {
+      "@catenet/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@catenet/core": "workspace:*"
+  }
+}

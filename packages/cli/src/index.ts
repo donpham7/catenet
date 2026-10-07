@@ -4,10 +4,12 @@ import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
+import { runHook } from "@catenet/adapter-claude-code";
 import {
   type Dependent,
   type DependentsResult,
   defaultDbPath,
+  findOptedInRoot,
   type Impact,
   indexRepo,
   openGraph,
@@ -17,6 +19,7 @@ import {
 import { daemonStatus, ensureDaemon, stopDaemon } from "@catenet/daemon";
 import { runStdioServer } from "@catenet/mcp";
 import { runDoctor } from "./doctor.js";
+import { initCommand, reportCommand } from "./m3.js";
 
 export interface Io {
   out(line: string): void;
@@ -40,6 +43,9 @@ Usage:
   catenet daemon start|stop|status       the per-repo daemon that keeps the graph current
   catenet mcp [--no-daemon]              MCP server over stdio (for Claude Code / Codex)
   catenet doctor                         health report; exit 1 if anything is broken
+  catenet init                           enable Catenet in this repo (index, daemon, plugin instructions)
+  catenet report [--session last|<id>]   what the agent did in a session
+  catenet hook <agent>                   hook entry for manual settings (stdin payload; --repo overrides its cwd)
 
 Targets: a file path (src/lib/format.ts), path#Symbol (src/lib/format.ts#formatCurrency) or a symbol name.
 Options: --repo <dir> (default: git root, else cwd), --json, --help`;
@@ -187,6 +193,7 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
     depth: { type: "string" },
     help: { type: "boolean", short: "h" },
     "no-daemon": { type: "boolean" },
+    session: { type: "string" },
   } as const;
   try {
     parsed = parseArgs({ args: argv, options: OPTIONS, allowPositionals: true });
@@ -201,7 +208,35 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
     io.out(HELP);
     return command || values.help ? 0 : 1;
   }
-  const root = repoRoot(io, values.repo);
+  if (command === "hook") {
+    // The hook client finds the repository itself, from the payload's cwd (or --repo), like the plugin's hook.
+    let stdin = "";
+    for await (const chunk of process.stdin) stdin += chunk;
+    let out = "";
+    await runHook(target ?? "claude-code", {
+      stdin,
+      env: process.env,
+      write: (t) => {
+        out += t;
+      },
+      startedAt: performance.timeOrigin,
+      ...(values.repo ? { startDir: resolve(io.cwd, values.repo) } : {}),
+    });
+    if (out) process.stdout.write(out);
+    return 0;
+  }
+  if (values.repo && !existsSync(resolve(io.cwd, values.repo))) {
+    io.err(`no such directory: ${sanitize(values.repo)}`);
+    return 1;
+  }
+  // Claude Code tells MCP servers the project directory (ADR-0015). The session may start in a subdirectory, so the
+  // root is the opted-in repository containing it, found the same way the hooks find it.
+  const projectDir = process.env.CLAUDE_PROJECT_DIR;
+  const root =
+    command === "mcp" && !values.repo
+      ? (findOptedInRoot(projectDir ?? io.cwd) ??
+        repoRoot({ ...io, cwd: resolve(projectDir ?? io.cwd) }, undefined))
+      : repoRoot(io, values.repo);
   const dbPath = defaultDbPath(root);
   const depth = values.depth === undefined ? undefined : Number(values.depth);
   if (depth !== undefined && (!Number.isInteger(depth) || depth < 1)) {
@@ -217,6 +252,8 @@ export async function main(argv: string[], io: Io = defaultIo): Promise<number> 
 
   if (command === "daemon") return daemonCommand(io, root, target, values.json === true);
 
+  if (command === "init") return initCommand(io, root, values.json === true);
+  if (command === "report") return reportCommand(io, root, values.session ?? "last", values.json === true);
   if (command === "doctor") {
     const report = await runDoctor(root);
     if (values.json) io.out(JSON.stringify(report, null, 2));

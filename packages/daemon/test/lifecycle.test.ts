@@ -1,7 +1,17 @@
 // Real processes: spawn, reuse, stop, crash recovery and build-mismatch restart (ROADMAP M2: "daemon restarts cleanly").
-import { existsSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { daemonStatus, ensureDaemon, readState, socketPath, stateFile, stopDaemon } from "../src/index.js";
+import {
+  acceptsBuild,
+  daemonStatus,
+  ensureDaemon,
+  readState,
+  socketPath,
+  stateFile,
+  stopDaemon,
+} from "../src/index.js";
 import { fixtureCopy, until } from "./helpers.js";
 
 let repo: ReturnType<typeof fixtureCopy>;
@@ -62,5 +72,35 @@ describe("daemon lifecycle", () => {
     const fresh = await ensureDaemon(repo.root, env);
     expect(fresh.status).toBe("restarted");
     if (fresh.status !== "failed") expect(fresh.health.pid).not.toBe(old.health.pid);
+  });
+
+  it("stops a stuck daemon that ignores SIGTERM (escalates to SIGKILL)", async () => {
+    // A process that looks like our daemon for this repo (same command-line shape) and ignores SIGTERM, as a daemon
+    // with a blocked event loop would.
+    const fakeMain = join(repo.runtime, "daemon.mjs");
+    mkdirSync(repo.runtime, { recursive: true });
+    writeFileSync(fakeMain, 'process.on("SIGTERM", () => {});\nsetInterval(() => {}, 1000);\n');
+    const child = spawn(process.execPath, [fakeMain, "--root", repo.root], { stdio: "ignore" });
+    const exited = new Promise<void>((r) => child.on("exit", () => r()));
+    await until(() => child.pid);
+    mkdirSync(join(repo.root, ".catenet"), { recursive: true });
+    writeFileSync(stateFile(repo.root), JSON.stringify({ pid: child.pid, socket: socketPath(repo.root) }));
+    await new Promise((r) => setTimeout(r, 200)); // let it install the SIGTERM handler
+    expect(await stopDaemon(repo.root)).toBe("stopped");
+    await exited;
+    expect(child.signalCode).toBe("SIGKILL");
+  });
+});
+
+describe("acceptsBuild", () => {
+  it("reuses the same build or the other install of the same version, and replaces anything else", () => {
+    expect(acceptsBuild("0.1.0+plugin+100", "0.1.0+plugin+100")).toBe(true);
+    // The workspace CLI and the plugin bundle must not keep replacing each other's daemon.
+    expect(acceptsBuild("0.1.0+plugin+100", "0.1.0+workspace+200")).toBe(true);
+    expect(acceptsBuild("0.1.0+workspace+200", "0.1.0+plugin+100")).toBe(true);
+    // A rebuild of the same install, or another version, replaces.
+    expect(acceptsBuild("0.1.0+plugin+100", "0.1.0+plugin+101")).toBe(false);
+    expect(acceptsBuild("0.1.0+workspace+100+old", "0.1.0+workspace+100")).toBe(false);
+    expect(acceptsBuild("0.0.9+plugin+100", "0.1.0+workspace+100")).toBe(false);
   });
 });

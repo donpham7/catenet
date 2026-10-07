@@ -1,0 +1,6 @@
+{
+  "name": "catenet",
+  "version": "0.1.0",
+  "description": "Code-graph context and a private activity record for Claude Code. Active only in repositories enabled with `catenet init`.",
+  "license": "MIT"
+}

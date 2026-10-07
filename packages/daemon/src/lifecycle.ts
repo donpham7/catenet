@@ -15,6 +15,7 @@ import { dirname } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { call, type HealthResponse, health } from "./client.js";
 import {
+  acceptsBuild,
   buildId,
   DAEMON_MAIN,
   type DaemonState,
@@ -89,7 +90,7 @@ export async function ensureDaemon(
     const want = buildIdFor(env);
     let restarted = false;
     const existing = await tryHealth(socket);
-    if (existing && existing.buildId === want) return { status: "running", health: existing };
+    if (existing && acceptsBuild(existing.buildId, want)) return { status: "running", health: existing };
     if (existing) {
       await stopDaemon(root);
       const still = await tryHealth(socket);
@@ -105,12 +106,8 @@ export async function ensureDaemon(
       const state = readState(root);
       if (state && isAlive(state.pid) && isOurDaemon(state.pid, root)) {
         const late = await waitFor(() => tryHealth(socket), 2000);
-        if (late && late.buildId === want) return { status: "running", health: late };
-        try {
-          process.kill(state.pid, "SIGTERM");
-        } catch {
-          // Already gone.
-        }
+        if (late && acceptsBuild(late.buildId, want)) return { status: "running", health: late };
+        await terminate(state.pid, root);
       }
       if (process.platform !== "win32" && !(await tryHealth(socket))) rmSync(socket, { force: true });
       rmSync(stateFile(root), { force: true });
@@ -140,9 +137,29 @@ export async function ensureDaemon(
   }
 }
 
+/**
+ * SIGTERM, then SIGKILL if the process is still alive after a grace period: a daemon whose event loop is blocked
+ * never runs its SIGTERM handler. Only called for a pid verified as our daemon; re-verified before the SIGKILL.
+ */
+async function terminate(pid: number, root: string, graceMs = 2000): Promise<void> {
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return; // Already gone.
+  }
+  if (await waitFor(async () => (isAlive(pid) ? null : true), graceMs)) return;
+  if (!isOurDaemon(pid, root)) return;
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // Already gone.
+  }
+  await waitFor(async () => (isAlive(pid) ? null : true), 1000);
+}
+
 export type StopResult = "stopped" | "not-running" | "still-running";
 
-/** Ask the daemon to exit; fall back to SIGTERM, but only for a verified Catenet daemon process. */
+/** Ask the daemon to exit; fall back to SIGTERM then SIGKILL, but only for a verified Catenet daemon process. */
 export async function stopDaemon(root: string): Promise<StopResult> {
   const socket = socketPath(root);
   const state = readState(root);
@@ -152,15 +169,22 @@ export async function stopDaemon(root: string): Promise<StopResult> {
   );
   const ours = !asked && state !== null && isAlive(state.pid) && isOurDaemon(state.pid, root);
   if (!asked && !ours) return "not-running";
-  if (ours && state) {
-    try {
-      process.kill(state.pid, "SIGTERM");
-    } catch {
-      // Already gone.
-    }
+  if (ours && state) await terminate(state.pid, root);
+  // "Stopped" means the process has exited, not just that its socket closed: a daemon still shutting down would
+  // otherwise be found alive (and signalled) by the next lifecycle call.
+  const pid = state?.pid;
+  const exited = () =>
+    waitFor(async () => {
+      if ((await tryHealth(socket)) !== null) return null;
+      return pid === undefined || !isAlive(pid) ? true : null;
+    }, 3000);
+  if (await exited()) return "stopped";
+  // It acknowledged /shutdown but didn't exit (e.g. stuck in a blocking call): escalate.
+  if (asked && pid !== undefined && isAlive(pid) && isOurDaemon(pid, root)) {
+    await terminate(pid, root, 500);
+    if (await exited()) return "stopped";
   }
-  const gone = await waitFor(async () => ((await tryHealth(socket)) === null ? true : null), 3000);
-  return gone ? "stopped" : "still-running";
+  return "still-running";
 }
 
 export type IndexRequest =

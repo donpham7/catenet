@@ -10,3 +10,6 @@ dist/
 
 # Spike scratch output (databases, generated inputs)
 spikes/data/
+
+# Built Claude Code plugin bundle (pnpm build:plugin); committed only once a release decision is made (ADR-0015).
+plugins/claude-code/dist/

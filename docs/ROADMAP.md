@@ -54,14 +54,32 @@ indirect dependents and the reaching test. (It also over-generalised that no dep
 bounded and deterministic; daemon restarts cleanly; `doctor` reports healthy/unhealthy accurately.
 
 ## M3. Events and Claude Code hooks (record only, no gating)
-- Neutral event schema + recorder. Claude Code adapter registers hooks (`http` for tool events, command for `SessionStart`,
-  ADR-0012); **no blocking** yet.
+**Status:** done and approved by the owner 2026-10-07 (including the code review fixes). ADR-0015 (command hooks everywhere, superseding ADR-0012's `http`
+plan; async recording hooks; opt-in via `catenet init`; context injection on by default; self-contained plugin bundle).
+Evidence:
+- **Real sessions:** Claude Code 2.1.287 in `-p`, plugin loaded with `--plugin-dir` on a copy of fixtures/ts-basic.
+  `catenet report` listed 6 of 6 tool calls (Read, Edit, Write, Bash), diffs for all 3 edited files (none partial), and
+  1 compaction. Claude quoted the injected blast-radius context in its answer.
+- **Latency:** in-session, p50 42 ms and p95 59 ms over the 21 hooks the daemon answered, measured from hook process
+  start to the daemon's answer (so excluding Claude Code's spawn cost and Node's exit; client-side failures weren't
+  counted yet in that run). The closest end-to-end number is the benchmark, timed from spawn to exit: p95 88 ms for a
+  hub edit with context on 2,011 files (`packages/adapters/claude-code/bench/RESULTS.md`).
+- **Code review (2026-10-07):** 32 findings fixed, including a daemon hang on pipe/device targets, a crash on an
+  unopenable `events.db`, heredoc bodies in the log, redaction gaps, daemon replacement between the workspace and
+  plugin installs, and injection hygiene for repository text; each has a test.
+- **Fault injection:** `packages/daemon/test/hook-client.test.ts` covers daemon down, slow daemon, malformed stdin,
+  garbage response, Node < 24, and a repository that hasn't opted in. The client always exits 0 within its cap.
+- **Resolved:** session id is kept across `--resume` and `/compact` (HOOK_SCHEMAS 8). Still open: the id across
+  `/clear` (needs an interactive session) and `ask` under each permission mode (M5, when Catenet first emits `ask`).
+
+- Neutral event schema + recorder. Claude Code adapter registers command hooks (ADR-0015, superseding ADR-0012's
+  `http` plan); **no blocking** yet.
 - Record real hook payloads into contract-test fixtures and resolve the UNCONFIRMED items in `HOOK_SCHEMAS.md` (session id
   across `/clear` and compaction, `ask` under each permission mode).
 - Secrets redaction; privacy defaults per ARCHITECTURE 2.4.
 - `catenet report --session last`.
 - Define `tool_calls.outcome` values from what the hook payloads in `HOOK_SCHEMAS.md` actually expose.
-- Plugin packaging for one-step install (with consent prompts).
+- Plugin packaging for one-step install; consent is per repository via `catenet init` (ADR-0015).
 
 **Acceptance:** a real Claude Code session produces a complete record of tool calls and diffs; hook failures never affect the
 agent (fault-injection tests: kill daemon, slow daemon, malformed payload); warm hook p95 < 100 ms measured end to end inside
@@ -163,7 +181,7 @@ showing what the layer does and does not improve.
 ## Open questions (decide with the owner; record as ADRs)
 1. ~~Project name and package namespace.~~ Resolved: Catenet (ADR-0007).
 2. ~~License (MIT vs Apache-2.0).~~ Resolved: MIT (ADR-0006).
-3. ~~Hook client implementation: Node script vs small compiled binary.~~ Resolved: `http` hooks + Node client (ADR-0012).
+3. ~~Hook client implementation: Node script vs small compiled binary.~~ Resolved: plain-JS Node command client for every hook (ADR-0012, ADR-0015).
 4. Is `policy.yaml` committed by default (team-shared) or local by default? (Recommendation: committed, with local override.)
 5. Default Bash handling strictness.
 6. How much of an agent's prompt text to store (default: hash + redacted preview).

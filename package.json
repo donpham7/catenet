@@ -8,15 +8,17 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "pnpm -r --filter \"./packages/*\" run build",
-    "typecheck": "pnpm -r --filter \"./packages/*\" --filter spikes run typecheck && tsc -p scripts/tsconfig.json",
+    "build": "pnpm -r --filter \"./packages/**\" run build",
+    "typecheck": "pnpm -r --filter \"./packages/**\" --filter spikes run typecheck && tsc -p scripts/tsconfig.json",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:plugin": "node scripts/build-plugin.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
     "@types/node": "24.19.1",
+    "esbuild": "0.28.2",
     "typescript": "7.0.2",
     "vitest": "5.0.3"
   }

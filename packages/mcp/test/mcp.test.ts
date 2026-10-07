@@ -16,7 +16,8 @@ afterAll(async () => {
   for (const t of temps) rmSync(t, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
-function repoFrom(files: Record<string, string> | { fixture: string }): string {
+/** A temporary repository; opted in (`.catenet/config.json`, as `catenet init` writes it) unless `optIn` is false. */
+function repoFrom(files: Record<string, string> | { fixture: string }, optIn = true): string {
   const tmp = mkdtempSync(join(tmpdir(), "cnm-"));
   temps.push(tmp);
   const root = join(tmp, "repo");
@@ -31,16 +32,27 @@ function repoFrom(files: Record<string, string> | { fixture: string }): string {
       writeFileSync(join(root, rel), content);
     }
   }
+  if (optIn) {
+    mkdirSync(join(root, ".catenet"), { recursive: true });
+    writeFileSync(join(root, ".catenet/config.json"), "{}\n");
+  }
   return root;
 }
 
-async function connect(root: string): Promise<Client> {
+/** `root: null` starts the server as the plugin does: no --repo, the project directory from CLAUDE_PROJECT_DIR. */
+async function connect(root: string | null, projectDir?: string): Promise<Client> {
   const client = new Client({ name: "catenet-test", version: "0.0.0" });
   await client.connect(
     new StdioClientTransport({
       command: process.execPath,
-      args: [CLI, "mcp", "--repo", root, "--no-daemon"],
+      args: [CLI, "mcp", ...(root ? ["--repo", root] : []), "--no-daemon"],
       stderr: "ignore",
+      ...(projectDir
+        ? {
+            env: { ...(process.env as Record<string, string>), CLAUDE_PROJECT_DIR: projectDir },
+            cwd: tmpdir(),
+          }
+        : {}),
     }),
   );
   clients.push(client);
@@ -149,6 +161,29 @@ describe("catenet MCP server", async () => {
     expect(raw).not.toContain("\u001b");
     expect(raw).not.toContain("\\u001b");
     expect(json.direct[0].file).toBe("src/evil.ts"); // the whole ESC[31m sequence is removed
+  });
+
+  it("finds the opted-in repository from a project directory below it (a session started in a subdirectory)", async () => {
+    const c = await connect(null, join(root, "src", "lib"));
+    const r = await callJson(c, "get_dependents", { target: "src/lib/format.ts" });
+    expect(r.isError).toBe(false);
+    expect(r.json.direct).toHaveLength(8);
+  });
+
+  it("treats a .catenet folder without config.json (e.g. left by `catenet index`) as not opted in", async () => {
+    const indexedOnly = repoFrom({ "a.ts": "export const a = 1;\n" }, false);
+    await indexRepo({ root: indexedOnly, full: true });
+    const r = await callJson(await connect(indexedOnly), "repo_map", {});
+    expect(r.isError).toBe(true);
+    expect(r.json.error).toContain("catenet init");
+  });
+
+  it("does nothing in a repository that hasn't opted in", async () => {
+    const plain = repoFrom({ "a.ts": "export const a = 1;\n" }, false);
+    const c = await connect(plain);
+    const r = await callJson(c, "get_dependents", { target: "a.ts" });
+    expect(r.isError).toBe(true);
+    expect(r.json.error).toContain("catenet init");
   });
 
   it("says when the repository has not been indexed yet", async () => {

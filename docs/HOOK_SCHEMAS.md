@@ -11,6 +11,9 @@ Source of truth for agent hook payloads. **Do not guess payload shapes; update t
   (not reachable when this was written; check it in M8).
 - Items marked **UNCONFIRMED** were not stated by the docs. M3 (Claude Code) and M8 (Codex) must verify them against
   **recorded real payloads**, which become the adapter contract-test fixtures.
+- **Recorded (M3, 2026-10-07):** 21 Claude Code 2.1.287 payloads from real `-p` sessions (start, resume, `/compact`;
+  Read, Edit, Write, Bash), paths sanitised: `packages/adapters/claude-code/test/payloads/claude-code-2.1.287.jsonl`,
+  checked by `test/payloads.test.ts`. Findings are in sections 2, 6, 7 and 8 below.
 
 ## 1. Events Catenet uses
 
@@ -19,10 +22,14 @@ Source of truth for agent hook payloads. **Do not guess payload shapes; update t
 | Session begins (inject repo map + policy summary) | `SessionStart` (`source`: `startup`, `resume`, `clear`, `compact`, `fork`) | `SessionStart` (`source`: `startup`, `resume`, `clear`, `compact`) |
 | Prompt submitted (off-task detection input, context) | `UserPromptSubmit` | `UserPromptSubmit` |
 | Gate a tool call | `PreToolUse` | `PreToolUse` |
-| Record outcome, reindex, post-edit feedback | `PostToolUse`, `PostToolUseFailure` | `PostToolUse` (also runs when a Bash command exits non-zero) |
+| Record outcome, reindex, post-edit feedback | `PostToolUse`, `PostToolUseFailure`, `PermissionDenied` | `PostToolUse` (also runs when a Bash command exits non-zero) |
 | Compaction (re-inject context after) | `PreCompact` / `PostCompact` (`manual`, `auto`) | `PreCompact` / `PostCompact` (`manual`, `auto`) |
 | Turn ends | `Stop` | `Stop` |
 | Session ends | `SessionEnd` (`reason`: `clear`, `resume`, `logout`, `prompt_input_exit`, `other`) | `SessionEnd` (main thread only; `reason` currently always `other`) |
+
+`PermissionDenied` (Claude Code; per the docs it carries `tool_name`, `tool_input` and `tool_use_id`) marks the call `denied`.
+`PostToolUseFailure` and `PermissionDenied` were not hit in the recorded sessions; their adapter tests use the documented
+shapes.
 
 Both agents have more events (Claude Code: `PermissionRequest`, `PostToolBatch`, `SubagentStart/Stop`, `FileChanged`, ...;
 Codex: `PermissionRequest`, `SubagentStart/Stop`, `Interrupt`). Catenet does not use them in v1.
@@ -52,6 +59,17 @@ Codex: `PermissionRequest`, `SubagentStart/Stop`, `Interrupt`). Catenet does not
 - `permission_mode`: `default | plan | acceptEdits | auto | dontAsk | bypassPermissions` ("not all events receive this field").
 - `agent_id` / `agent_type` only inside a subagent or with `--agent`. `prompt_id` absent until the first user input.
 - `transcript_path` is written asynchronously and may lag.
+- **Observed in 2.1.287** (recorded payloads): every event carried `session_id`, `transcript_path`, `cwd`,
+  `scratchpad_dir`, `hook_event_name`. `prompt_id` was absent on `SessionStart` with `source` `startup` or `resume`.
+  `permission_mode` was absent on `SessionStart`, `PreCompact` and `SessionEnd`. Undocumented extras: `model` appeared
+  only on `SessionStart` with `source: "compact"` (so `sessions.model` is usually empty); `context_tokens`,
+  `seconds_since_last_response`, `prompt_cache_likely_expired` and `estimated_cache_write_usd` only on
+  `source: "resume"`; tool events have `effort`; `PostToolUse` has `duration_ms`; `Stop` has
+  `last_assistant_message`, `background_tasks`, `session_crons`. The adapter reads only documented fields plus `model`
+  and `duration_ms`, both optional.
+- **`PostToolUse.tool_response` can hold file contents**: for `Edit` it includes `originalFile`, `oldString`,
+  `newString` and `structuredPatch`; for `Write`, `content` and `originalFile`; for `Read`, the file. Catenet's hook
+  client drops `tool_response` before sending the payload to the daemon, so it is never stored (ARCHITECTURE 2.4).
 
 **Codex**:
 - `session_id` ("Subagent hooks use the parent session id"), `transcript_path` (string or null; format "isn't a stable
@@ -247,6 +265,13 @@ Both agents accept plain stdout or JSON `additionalContext` as context. Claude C
 ```
   "HTTP hooks can't signal a blocking error through status codes alone": return 2xx + JSON decision. Non-2xx or a
   connection failure is a non-blocking error (fail-open). Admins can restrict URLs with `allowedHttpHookUrls`.
+- **Why Catenet doesn't use `http` hooks (ADR-0015):** variables are expanded in `headers` (via `allowedEnvVars`) but
+  not in `url`, and Catenet's daemons are per repository, so one static plugin config can't reach the right daemon.
+- **`async: true`** (command hooks; verified 2026-10-07): the hook gets the full stdin payload but Claude Code doesn't
+  wait for it, and its output can't affect the session. In `-p` mode, async hooks still running when the session ends
+  are cancelled. Catenet makes every recording-only hook async.
+- **Exec form** (`"command": "node", "args": [...]`) expands `${CLAUDE_PLUGIN_ROOT}` in `args`. `CLAUDE_PROJECT_DIR` is
+  exported to hook commands and to MCP servers.
 
 **Codex** (`~/.codex/hooks.json`, `~/.codex/config.toml`, `<repo>/.codex/hooks.json`, `<repo>/.codex/config.toml`, or a
 plugin's `hooks/hooks.json`; all layers run, none replace each other):
@@ -271,7 +296,9 @@ statusMessage = "Checking Bash command"
 - **Claude Code `-p`**: with no permission host (no `--permission-prompt-tool`, no SDK `canUseTool`), a call that would
   prompt is **denied**, not hung; Claude reads `permissionDecisionReason` in the tool result. With a host, the run waits
   for the host. In auto mode, a hook `ask` forces a prompt (the classifier can deny but not silently approve).
-- Hook `ask` under `dontAsk`, `bypassPermissions` and `acceptEdits`: **UNCONFIRMED**.
+- Hook `ask` under `dontAsk`, `bypassPermissions` and `acceptEdits`: **UNCONFIRMED** (M3 never emits `ask`; check in M5).
+- **Observed (M3):** in `-p`, `PostCompact` (async) was never recorded: the session ended before it ran and it was
+  cancelled. Synchronous hooks (`SessionStart`, `PreToolUse`, `Stop`, `SessionEnd`) all ran.
 - **Codex `codex exec`**: no hook can ask (see 3.2). Actions needing new approval fail in non-interactive flows.
 - **Security note (Claude Code)**: in `-p`/SDK sessions the workspace-trust dialog is skipped, so hooks committed in a
   repository's `.claude/settings.json` run in folders never trusted. Catenet must never rely on repo-committed hooks for
@@ -280,7 +307,11 @@ statusMessage = "Checking Bash command"
 ## 8. Session identity
 
 - Claude Code: `--resume`/`--continue` keep the session id; `--fork-session` creates a new one. `/clear` fires `SessionEnd`
-  (`clear`) then `SessionStart` (`clear`). Whether the id changes on `/clear` or compaction: **UNCONFIRMED**.
+  (`clear`) then `SessionStart` (`clear`).
+  - **Confirmed (M3 recordings, 2.1.287):** `--resume` keeps the id (`SessionStart` with `source: "resume"`), and so does
+    `/compact` (`PreCompact` `trigger: "manual"`, then `SessionStart` `source: "compact"`, same id). In `-p`, each run
+    ended with `SessionEnd` `reason: "other"`, including runs later resumed.
+  - Whether the id changes on `/clear`: **UNCONFIRMED** (`/clear` isn't available in `-p`; check interactively).
 - Codex: example ids look like thread ids (`thr_...`); subagent hooks carry the parent session id. Persistence across
   compaction/resume: **UNCONFIRMED** (implied).
 - Catenet therefore keys sessions on `(agent, session_id)` and records `SessionStart.source`, rather than assuming either.

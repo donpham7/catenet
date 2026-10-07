@@ -20,6 +20,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@catenet/adapter-claude-code": "workspace:*",
     "@catenet/core": "workspace:*",
     "@catenet/daemon": "workspace:*",
     "@catenet/mcp": "workspace:*",

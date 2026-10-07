@@ -1,7 +1,15 @@
 // MCP server with read-only graph tools (ARCHITECTURE 2.7, ADR-0014). Reads graph.db directly; the daemon keeps it
 // current. Every response is JSON data (never prose), sanitised, bounded and in a deterministic order.
 import { existsSync } from "node:fs";
-import { defaultDbPath, type Graph, indexRepo, openGraph, sanitizeText, TargetError } from "@catenet/core";
+import {
+  defaultDbPath,
+  type Graph,
+  indexRepo,
+  isOptedIn,
+  openGraph,
+  sanitizeDeep,
+  TargetError,
+} from "@catenet/core";
 import { ensureDaemon, health, requestIndex, socketPath } from "@catenet/daemon";
 import { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
@@ -23,18 +31,8 @@ const TARGET_HELP =
 
 type ToolResult = { content: { type: "text"; text: string }[]; isError?: boolean };
 
-/** Recursively sanitise every string (CLAUDE.md principle 5). Object keys are Catenet's own. */
-function clean(value: unknown): unknown {
-  if (typeof value === "string") return sanitizeText(value);
-  if (Array.isArray(value)) return value.map(clean);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, clean(v)]));
-  }
-  return value;
-}
-
 const text = (data: unknown, isError = false): ToolResult => ({
-  content: [{ type: "text", text: JSON.stringify(clean(data), null, 2) }],
+  content: [{ type: "text", text: JSON.stringify(sanitizeDeep(data), null, 2) }],
   ...(isError ? { isError: true } : {}),
 });
 
@@ -57,8 +55,14 @@ export function createMcpServer(opts: McpOptions): { server: McpServer; close():
     return h ? (h.watching ? "watching" : "running") : "not running";
   };
 
+  // Catenet only acts in repositories that opted in with `catenet init` (ADR-0015).
+  const optedIn = () => isOptedIn(root);
+  const notEnabled = () =>
+    text({ error: "Catenet isn't enabled in this repository. Run `catenet init` in it to enable it." }, true);
+
   /** Run a query against a freshly opened graph and attach freshness. */
   const withGraph = async (fn: (g: Graph) => Record<string, unknown>): Promise<ToolResult> => {
+    if (!optedIn()) return notEnabled();
     if (!existsSync(dbPath)) {
       if (!useDaemon)
         return text({ error: "The repository has not been indexed yet. Call rescan to index it." }, true);
@@ -238,6 +242,7 @@ export function createMcpServer(opts: McpOptions): { server: McpServer; close():
       inputSchema: z.object({ full: z.boolean().default(false) }),
     },
     async ({ full }) => {
+      if (!optedIn()) return notEnabled();
       try {
         const viaDaemon = useDaemon ? await requestIndex(root, full) : ({ kind: "unreachable" } as const);
         if (viaDaemon.kind === "error")
@@ -261,7 +266,7 @@ export function createMcpServer(opts: McpOptions): { server: McpServer; close():
   );
 
   let heartbeat: NodeJS.Timeout | undefined;
-  if (useDaemon) {
+  if (useDaemon && optedIn()) {
     void ensureDaemon(root);
     // Keeps the daemon from idling out while an agent session is open.
     heartbeat = setInterval(

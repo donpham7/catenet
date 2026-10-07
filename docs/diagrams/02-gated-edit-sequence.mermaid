@@ -12,7 +12,7 @@ sequenceDiagram
 
   alt daemon down, slow (over time budget) or error
     D--xH: no response
-    H-->>A: allow (fail-open), error logged
+    H-->>A: no output, so the tool call proceeds (fail-open), error logged
   else normal path
     D->>G: resolve file to node, load impact
     G-->>D: dependents, tests, component, requirements
@@ -20,16 +20,16 @@ sequenceDiagram
     P-->>D: verdict + evidence
     D->>E: record decision
     D-->>H: verdict + additional context
-    H-->>A: allow / ask / deny + dependents and tests
+    H-->>A: context, or ask / deny with reasons (never an explicit allow)
   end
 
   opt edit proceeds (allowed or human approved)
     A->>A: apply edit
     A->>H: PostToolUse
-    H->>D: diff stats
+    H->>D: neutral event {tool, paths, outcome}
     D->>G: incremental reindex of the file
     D->>P: check architecture rule violations
-    D->>E: record diff and outcome
+    D->>E: record outcome and diff stats (the daemon reads the file itself)
     opt violation introduced
       D-->>H: violation evidence
       H-->>A: feedback so the agent can fix it

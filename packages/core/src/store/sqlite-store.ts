@@ -1,7 +1,7 @@
 // SqliteGraphStore: the only module that contains SQL (ARCHITECTURE 2.2). node:sqlite per ADR-0010.
-import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync, type StatementSync } from "node:sqlite";
+import { prepareStateDir } from "../config.js";
 import type { Confidence, EdgeAttrs, EdgeRecord, NodeKey } from "../model.js";
 import { DEPENDENCY_KINDS } from "../model.js";
 import { MIGRATIONS, SCHEMA_VERSION } from "./schema.js";
@@ -52,7 +52,7 @@ export class SqliteGraphStore {
   private readonly stmts = new Map<string, StatementSync>();
 
   constructor(path: string) {
-    if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
+    if (path !== ":memory:") prepareStateDir(dirname(path));
     // Wait for a concurrent writer (another index run, later the daemon) instead of failing with SQLITE_BUSY.
     this.db = new DatabaseSync(path, { timeout: 5000 });
     this.db.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;");
@@ -445,6 +445,48 @@ export class SqliteGraphStore {
       attrs: string | null;
     }[];
     return rows.map((r) => ({ ...r, lines: (parse(r.attrs).lines as number[] | undefined) ?? [] }));
+  }
+
+  /**
+   * Counts over the transitive dependents of a target in one query (the fast path for injected context): the closure
+   * of `file_deps` from the direct dependents, with how many are reached by a test and how many packages are involved.
+   * The walk never passes through the target's file, matching impact()'s closure.
+   */
+  closureStats(
+    directPaths: string[],
+    targetPath: string,
+  ): { transitive: number; covered: number; packages: number } {
+    if (directPaths.length === 0) {
+      const own = this.packageOfFile(targetPath);
+      return { transitive: 0, covered: 0, packages: own ? 1 : 0 };
+    }
+    const marks = directPaths.map(() => "?").join(",");
+    const row = this.db
+      .prepare(
+        `WITH RECURSIVE dep(id) AS (
+           SELECT id FROM nodes WHERE kind = 'file' AND path IN (${marks})
+           UNION
+           SELECT fd.src_file FROM file_deps fd JOIN dep ON fd.dst_file = dep.id
+           -- Never walk through the target itself, like impact(): for a symbol target, the target file's other
+           -- importers depend on other symbols, not on this one.
+           WHERE fd.src_file NOT IN (SELECT id FROM nodes WHERE kind = 'file' AND path = ?)
+         ),
+         files AS (SELECT n.id, n.path FROM dep JOIN nodes n ON n.id = dep.id WHERE n.path <> ?)
+         SELECT
+           (SELECT COUNT(*) FROM files) AS transitive,
+           (SELECT COUNT(*) FROM files f WHERE EXISTS (
+              SELECT 1 FROM edges e JOIN nodes t ON t.id = e.dst
+              WHERE e.kind = 'tests' AND t.kind IN ('file', 'symbol') AND t.path = f.path)) AS covered,
+           (SELECT COUNT(DISTINCT c.src) FROM edges c JOIN nodes p ON p.id = c.src JOIN nodes f ON f.id = c.dst
+            WHERE c.kind = 'contains' AND p.kind = 'package' AND f.kind = 'file'
+              AND (f.id IN (SELECT id FROM files) OR f.path = ?)) AS packages`,
+      )
+      .get(...directPaths, targetPath, targetPath, targetPath) as {
+      transitive: number;
+      covered: number;
+      packages: number;
+    };
+    return row;
   }
 
   /** Test files with a `tests` edge into any of the target nodes. */

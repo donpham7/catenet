@@ -1,4 +1,7 @@
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Language, Parser } from "web-tree-sitter";
 import { extractPython } from "./python.js";
 import type { FileFacts, Lang } from "./types.js";
@@ -34,14 +37,22 @@ export function langForPath(path: string): Lang | null {
 
 let shared: Promise<Extractor> | null = null;
 
+/** In the plugin bundle the .wasm files sit in dist/wasm/ next to the code (ADR-0015); otherwise in node_modules. */
+const BUNDLED_WASM = join(dirname(fileURLToPath(import.meta.url)), "wasm");
+const isBundled = () => existsSync(join(BUNDLED_WASM, "web-tree-sitter.wasm"));
+
 /** Load web-tree-sitter and the four grammars once per process (ADR-0011). */
 export function loadExtractor(): Promise<Extractor> {
   shared ??= (async () => {
-    await Parser.init();
+    const bundled = isBundled();
+    await Parser.init(bundled ? { locateFile: (name: string) => join(BUNDLED_WASM, name) } : undefined);
     const require = createRequire(import.meta.url);
     const languages = {} as Record<Lang, Language>;
     for (const lang of Object.keys(GRAMMARS) as Lang[]) {
-      languages[lang] = await Language.load(require.resolve(GRAMMARS[lang]));
+      const file = GRAMMARS[lang];
+      languages[lang] = await Language.load(
+        bundled ? join(BUNDLED_WASM, basename(file)) : require.resolve(file),
+      );
     }
     const parser = new Parser();
     return {

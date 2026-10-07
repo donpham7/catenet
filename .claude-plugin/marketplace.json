@@ -1,0 +1,13 @@
+{
+  "name": "catenet",
+  "owner": {
+    "name": "Catenet contributors"
+  },
+  "plugins": [
+    {
+      "name": "catenet",
+      "source": "./plugins/claude-code",
+      "description": "Code-graph context and a private activity record for coding agents."
+    }
+  ]
+}

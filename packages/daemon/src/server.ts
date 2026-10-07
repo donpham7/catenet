@@ -8,6 +8,7 @@ import { dirname } from "node:path";
 import { Worker } from "node:worker_threads";
 import { CATENET_VERSION, type IndexStats } from "@catenet/core";
 import { type HealthResponse, health } from "./client.js";
+import { HookHandler, type HookRequest } from "./hooks.js";
 import { buildId as currentBuildId, type DaemonState, INDEX_WORKER, socketPath, stateFile } from "./paths.js";
 import { type RepoWatcher, watchRepo } from "./watcher.js";
 
@@ -36,6 +37,10 @@ export interface Daemon {
 }
 
 export const DEFAULT_IDLE_MS = 60 * 60 * 1000;
+/** Request bodies above this are dropped unread (hook clients strip tool output, so real payloads are small). */
+export const MAX_BODY_BYTES = 1024 * 1024;
+/** After the hook handler fails to start (e.g. events.db unwritable), wait this long before trying again. */
+const HOOKS_RETRY_MS = 30_000;
 
 export function createDaemon(opts: DaemonOptions): Daemon {
   const root = opts.root;
@@ -134,6 +139,21 @@ export function createDaemon(opts: DaemonOptions): Daemon {
       if (!running) void drain();
     });
 
+  /** Created on the first hook, so a daemon serving only MCP never opens events.db. */
+  let hooks: HookHandler | null = null;
+  let hooksFailedAt = 0;
+  /** The hook handler, created on first use. Never throws: a broken events.db must not take the daemon down. */
+  const hookHandler = (): HookHandler | null => {
+    if (hooks || Date.now() - hooksFailedAt < HOOKS_RETRY_MS) return hooks;
+    try {
+      hooks = new HookHandler(root, opts.dbPath, log);
+    } catch (err) {
+      hooksFailedAt = Date.now();
+      log(`hook recording unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return hooks;
+  };
+
   const snapshot = (): HealthResponse => ({
     ok: true,
     version: CATENET_VERSION,
@@ -155,11 +175,24 @@ export function createDaemon(opts: DaemonOptions): Daemon {
   const handle = (req: IncomingMessage, res: ServerResponse) => {
     lastRequestAt = Date.now();
     let body = "";
+    let tooLarge = false;
     req.setEncoding("utf8");
     req.on("data", (c: string) => {
-      body += c;
+      if (tooLarge) return;
+      if (Buffer.byteLength(body) + Buffer.byteLength(c) > MAX_BODY_BYTES) {
+        tooLarge = true;
+        body = "";
+      } else body += c;
     });
     req.on("end", () => {
+      if (tooLarge) {
+        log(`dropped a ${req.method} ${req.url} request larger than ${MAX_BODY_BYTES} bytes`);
+        return json(
+          res,
+          req.url === "/hook" ? 200 : 413,
+          req.url === "/hook" ? { output: "" } : { error: "too large" },
+        );
+      }
       if (req.method === "GET" && req.url === "/health") return json(res, 200, snapshot());
       if (req.method === "POST" && req.url === "/index") {
         let full = false;
@@ -173,6 +206,16 @@ export function createDaemon(opts: DaemonOptions): Daemon {
           (err: unknown) => json(res, 500, { error: err instanceof Error ? err.message : String(err) }),
         );
         return;
+      }
+      if (req.method === "POST" && req.url === "/hook") {
+        // Agent hooks (ADR-0015). Always 200: a hook failure must never reach the agent.
+        let parsed: HookRequest = {};
+        try {
+          parsed = body ? (JSON.parse(body) as HookRequest) : {};
+        } catch {
+          return json(res, 200, { output: "" });
+        }
+        return json(res, 200, hookHandler()?.handle(parsed) ?? { output: "" });
       }
       if (req.method === "POST" && req.url === "/shutdown") {
         json(res, 200, { ok: true });
@@ -269,6 +312,7 @@ export function createDaemon(opts: DaemonOptions): Daemon {
         if (!other) rmSync(socket, { force: true });
       }
       await worker?.terminate();
+      hooks?.close();
       removeState();
       log("daemon stopped");
       opts.onStop?.();

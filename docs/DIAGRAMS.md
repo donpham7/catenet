@@ -93,7 +93,7 @@ sequenceDiagram
 
   alt daemon down, slow (over time budget) or error
     D--xH: no response
-    H-->>A: allow (fail-open), error logged
+    H-->>A: no output, so the tool call proceeds (fail-open), error logged
   else normal path
     D->>G: resolve file to node, load impact
     G-->>D: dependents, tests, component, requirements
@@ -101,16 +101,16 @@ sequenceDiagram
     P-->>D: verdict + evidence
     D->>E: record decision
     D-->>H: verdict + additional context
-    H-->>A: allow / ask / deny + dependents and tests
+    H-->>A: context, or ask / deny with reasons (never an explicit allow)
   end
 
   opt edit proceeds (allowed or human approved)
     A->>A: apply edit
     A->>H: PostToolUse
-    H->>D: diff stats
+    H->>D: neutral event {tool, paths, outcome}
     D->>G: incremental reindex of the file
     D->>P: check architecture rule violations
-    D->>E: record diff and outcome
+    D->>E: record outcome and diff stats (the daemon reads the file itself)
     opt violation introduced
       D-->>H: violation evidence
       H-->>A: feedback so the agent can fix it
@@ -167,7 +167,7 @@ flowchart LR
 
 ## Storage schema
 
-graph.db (nodes, edges, derived file facts and file-level deps, meta) and events.db (sessions, prompts, tool calls, decisions, diffs, errors, schema version).
+graph.db (nodes, edges, derived file facts and file-level deps, meta) and events.db (sessions keyed by agent and session id, prompts, tool calls, diffs, compactions, hook latency, decisions from M5, errors, schema version). Every events.db table except `errors` and `meta` also carries `agent`; the diagram omits it for brevity. Hook failures that never reached the daemon are counted from `.catenet/hook-errors.log`, not stored here.
 
 ```mermaid
 erDiagram
@@ -220,35 +220,41 @@ erDiagram
   NODES ||--o{ FILE_DEPS : "src/dst files"
 
   SESSIONS {
-    string id PK
-    string agent "claude-code|codex"
-    string agent_version
-    int started_at
-    int ended_at
+    string agent PK "claude-code|codex"
+    string id PK "agent session id; stable across resume and compaction"
+    string model
+    string source "how it first started: startup|resume|clear|compact|fork"
     string cwd
     string git_head
+    int started_at
+    int last_event_at
+    int ended_at
+    string end_reason
+    int turns
   }
   PROMPTS {
-    string id PK
+    int id PK
     string session_id FK
     int ts
     string text_hash
-    string text_preview_redacted
+    string text_preview_redacted "120 chars"
   }
   TOOL_CALLS {
-    string id PK
+    int id PK
     string session_id FK
+    string tool_use_id "unique per session"
     int ts
     string tool
-    string target_paths "JSON"
-    string args_summary "redacted"
-    string outcome
+    string target_paths "JSON, repo-relative"
+    string args_summary "redacted, 200 chars"
+    string outcome "succeeded|failed|denied|unknown"
     int duration_ms
+    int ended_at
   }
   DECISIONS {
     string id PK
     string session_id FK
-    string tool_call_id FK "nullable (post-edit violations)"
+    string tool_use_id "nullable (post-edit violations)"
     int ts
     string verdict "allow|ask|deny"
     string rule_ids "JSON"
@@ -256,28 +262,49 @@ erDiagram
     int latency_ms
   }
   DIFFS {
-    string id PK
+    int id PK
     string session_id FK
+    string tool_use_id
     int ts
     string path
     int added
     int removed
-    string content_hash_before
-    string content_hash_after
+    string hash_before
+    string hash_after
+    int partial "1 = counts unavailable (before-state missing or a read skipped)"
+  }
+  COMPACTIONS {
+    int id PK
+    string session_id FK
+    int ts
+    string phase "pre|post"
+    string trigger "manual|auto"
+  }
+  HOOK_CALLS {
+    int id PK
+    string session_id FK
+    int ts
+    string event
+    int sync "1 = the agent waited for it"
+    int ms "hook process start to daemon answer"
   }
   ERRORS {
     int id PK
     int ts
-    string subsystem
-    string message
+    string component
+    string message "redacted"
   }
   EVENTS_META {
-    int schema_version
+    string key PK "schema_version"
+    string value
   }
   SESSIONS ||--o{ PROMPTS : has
   SESSIONS ||--o{ TOOL_CALLS : has
   SESSIONS ||--o{ DECISIONS : has
   SESSIONS ||--o{ DIFFS : has
+  SESSIONS ||--o{ COMPACTIONS : has
+  SESSIONS ||--o{ HOOK_CALLS : has
+  TOOL_CALLS ||--o{ DIFFS : "edit"
   TOOL_CALLS ||--o| DECISIONS : "gated by"
 ```
 

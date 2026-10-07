@@ -142,21 +142,51 @@ a package and published API is defined in ADR-0008; `fixtures/README.md` shows w
 an incoming `tests` edge. This is **static** coverage ("some test imports or references it"), not runtime coverage;
 evidence, `catenet why` and docs must label it that way.
 
-### 2.4 Event recorder (`events.db`)
-Neutral schema, agent-independent:
+### 2.4 Event recorder (`events.db`), M3
+`.catenet/events.db`, written by the daemon's `POST /hook` handler (ADR-0015). Neutral schema, agent-independent; every
+table except `errors` and `meta` also has `agent`, and sessions are keyed by `(agent, session_id)`:
 ```
-sessions(id, agent, agent_version, started_at, ended_at, cwd, git_head)
+sessions(agent, id, model, source, cwd, git_head, started_at, last_event_at, ended_at, end_reason, turns)
+                                                                   -- source: how it first started (resume/compact keep it)
 prompts(id, session_id, ts, text_hash, text_preview_redacted)     -- full text NOT stored by default
-tool_calls(id, session_id, ts, tool, target_paths JSON, args_summary, outcome, duration_ms)
-decisions(id, session_id, tool_call_id NULL, ts, verdict, rule_ids JSON, evidence JSON, latency_ms)
-                                                                   -- tool_call_id NULL for post-edit violation decisions
-diffs(id, session_id, ts, path, added, removed, content_hash_before, content_hash_after)
-errors(id, ts, subsystem, message)                                 -- hook/daemon failures (fail-open log)
-meta(schema_version)                                               -- reported by `catenet doctor`
+tool_calls(id, session_id, tool_use_id, ts, tool, target_paths JSON, args_summary, outcome, duration_ms, ended_at)
+                                                                   -- outcome: succeeded|failed|denied|unknown
+diffs(id, session_id, tool_use_id, ts, path, added, removed, hash_before, hash_after, partial)
+compactions(id, session_id, ts, phase, trigger)                    -- phase pre|post, trigger manual|auto
+hook_calls(id, session_id, ts, event, sync, ms)                    -- ms: hook process start to daemon answer;
+                                                                   -- sync: the agent waited for it
+decisions(id, session_id, tool_use_id NULL, ts, verdict, rule_ids JSON, evidence JSON, latency_ms)
+                                                                   -- M5; tool_use_id NULL for post-edit violation decisions
+errors(id, ts, component, message)                                 -- hook/daemon failures (fail-open log)
+meta(key, value)                                                   -- schema_version, reported by `catenet doctor`
 ```
-`tool_calls.args_summary` is redacted like any other stored text. `decisions.evidence` lists every matched rule with its `on_match` and any engine cap applied. This section is the source of truth for the event schema; `docs/diagrams/04-storage-er.mermaid` mirrors it.
-Privacy defaults: store paths, hashes, counts, and short redacted previews; store file contents or full
-prompts only with an explicit opt-in setting. Run a secrets-redaction pass on any stored text.
+This section is the source of truth for the event schema; `docs/diagrams/04-storage-er.mermaid` mirrors it.
+`decisions.evidence` lists every matched rule with its `on_match` and any engine cap applied.
+- **Tool calls:** one row per `tool_use_id`, opened by `PreToolUse` (edit tools only) and closed by `PostToolUse`
+  (`succeeded`), `PostToolUseFailure` (`failed`) or `PermissionDenied` (`denied`); `unknown` if no end event arrives.
+- **Diffs** (Edit, Write, MultiEdit, NotebookEdit, successful calls only): the daemon reads the file at `PreToolUse`
+  (held in memory only, 10-minute expiry) and again at `PostToolUse`, and stores multiset line counts plus content
+  hashes. It reads only regular files inside the repository (after resolving symlinks) of at most 2 MB; pipes, devices
+  and files outside the repository are never opened. A row has `partial = 1` and no line counts when the before-state
+  is missing (daemon restarted, or the call took over 10 minutes) or a read was skipped. Bash-made changes get no diff.
+- **Privacy defaults:** store paths, hashes, counts, and short redacted previews: prompts as a hash plus 120 characters,
+  `args_summary` at most 200 characters (a Bash command's first line only, so heredoc and here-string bodies are
+  dropped; a search pattern; a URL), never file contents, edit strings or tool output. Tool-call paths are relative to
+  the repository root. All stored text goes through `redactSecrets`: private keys; AWS, GitHub, GitLab, Google,
+  OpenAI/Anthropic `sk-`, Stripe, Slack and JWT tokens; `Bearer`/`Basic` credentials; passwords in URLs, `curl -u`,
+  `mysql -p` and `docker login -p`; secret-named flags (`--password`, `--api-key`, ...); and `key = value`,
+  `key: value` and JSON assignments whose key names a secret (password, passwd, pwd, pass, secret, token, api key,
+  access key, private key, credential), quoted values included. Storing contents or full prompts would need an
+  explicit opt-in setting (not built).
+- **Schema version:** `meta.schema_version` is checked on open; a file from another version is renamed to
+  `events.db.v<N>.bak` and a fresh one is created (the log is local and pre-release).
+- **Retention:** 30 days (`retentionDays` in `.catenet/config.json`), pruned right after the daemon answers its first
+  hook.
+- **`catenet report [--session last|<id>] [--json]`** reads it: session facts (local times), prompts, tool calls by
+  tool and outcome, edited files with diff stats and their current blast radius, compactions, and hooks: how many the
+  daemon answered, p50/p95/max over the synchronous ones (from hook process start to the daemon's answer, which leaves
+  out Claude Code's own spawn cost and Node's exit), and how many failed, counted from the hook client's
+  `.catenet/hook-errors.log` (one tab-separated line per failure: time, event, session id, message).
 
 ### 2.5 Policy engine (`packages/core/policy`)
 Config: `.catenet/policy.yaml` (committed by default so teams share rules; local override in
@@ -220,14 +250,15 @@ measure false-positive rate before ever promoting it.
 ### 2.6 Adapters (`packages/adapters/*`)
 Translate agent-specific hook payloads to neutral events and neutral decisions back to the agent's response format.
 
-Exact payloads, responses and caveats are in `docs/HOOK_SCHEMAS.md` (verified 2026-10-04). Transport per ADR-0012.
+Exact payloads, responses and caveats are in `docs/HOOK_SCHEMAS.md` (verified 2026-10-04, Claude Code payloads re-checked against real sessions in M3). Transport: ADR-0015 for Claude Code, ADR-0012 for Codex.
 
-**Claude Code**: hooks for `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`,
-`PreCompact`/`PostCompact`, `Stop`, `SessionEnd`. Tool events use **`http` hooks** to the daemon's loopback listener (no
-process spawn; a refused connection is non-blocking, so fail-open is built in). `SessionStart` supports only command
-hooks, so it uses the Node command client. Decisions go in `hookSpecificOutput.permissionDecision` (`ask` / `deny`);
-`tell_agent` context goes in `additionalContext`. Package as a Claude Code **plugin** (`hooks/hooks.json`, `.mcp.json`,
-`skills/`) so install is one step.
+**Claude Code** (`packages/adapters/claude-code`, M3, ADR-0015): `translate(payload)` maps a hook payload to a neutral
+event and `respond(event, context)` builds the response. Every hook is a **command hook** running the bundled client
+(`hook.mjs`): `SessionStart`, `PreToolUse` (edit tools only), `Stop` and `SessionEnd` are synchronous;
+`UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `PermissionDenied`, `PreCompact` and `PostCompact` are `async`
+(Claude Code doesn't wait for them). M3 responds only with `additionalContext` (`SessionStart` repo map, `PreToolUse`
+blast radius summary) and never with `permissionDecision`; M5 adds `ask` / `deny`. Packaged as a plugin (2.13).
+Contract tests use the HOOK_SCHEMAS examples and payloads recorded from real sessions (`test/payloads/`).
 
 **Codex CLI**: command hooks only (`hooks.json` or `[hooks]` in `config.toml`), all through the Node command client.
 Edits arrive as `tool_name: "apply_patch"` with the patch text in `tool_input.command`, so the adapter must parse the patch
@@ -237,7 +268,12 @@ contract down with schema tests against recorded payloads.
 
 Adapter constraints: tiny, no business logic, never throw to the agent, honor fail-open, never emit an explicit `allow`
 (that would skip the user's own permission prompts), and keep injected context to **at most ~2,000 tokens** so it fits
-both agents' caps. The command client is plain JS on `node:net` with a 250 ms hard timeout (S4: 47 ms p95).
+both agents' caps. The command client uses Node built-ins only and has a 250 ms timeout on `PreToolUse` (2 s for other
+events). It finds the repository by walking up from the session's directory to the nearest `.catenet/config.json`
+(only `catenet init` writes it), never accepting the home directory or the filesystem root, and does nothing when there
+is none. It drops `tool_response` and `last_assistant_message` before sending, logs any failure or non-200 answer to
+`.catenet/hook-errors.log` (rotated at 512 KB), and starts a daemon only at `SessionStart` and only when none is
+running (a slow daemon is left alone).
 
 ### 2.7 MCP server (`packages/mcp`)
 Read-only tools, built on `@modelcontextprotocol/server` v2 (ADR-0009), run as `catenet mcp` (stdio; stdout is
@@ -300,17 +336,21 @@ Later views: session timeline/replay, run comparison (Claude Code vs Codex), hot
 
 ### 2.10 CLI (`packages/cli`)
 ```
-catenet init                 # create .catenet/, default policy (all rules record_only), install adapters (asks first)
+catenet init                 # opt in: create .catenet/ (own .gitignore, config.json), index, start daemon, print plugin install steps (M3)
+                             # refuses a missing directory, the home directory and /
+                             # M5 adds the default policy (all rules record_only)
 catenet index [--full]       # build or incrementally update the graph            (M1)
 catenet impact <target>      # blast radius with evidence                          (M1)
 catenet deps|dependents <target> [--depth N]                                       (M1)
                              # all M1 commands: --repo <dir> (default git root, else cwd), --json
 catenet why <decision-id>
-catenet report [--session last]
+catenet report [--session last|<id>] [--json]                                       (M3)
+catenet hook <agent> [--repo <dir>]  # the hook client, for manual settings.json setups (M3)
 catenet guidance --write|--check
 catenet daemon start|stop|status                                                    (M2)
-catenet mcp [--no-daemon]    # MCP server over stdio                                (M2)
-catenet doctor [--json]      # node, graph versions, freshness, daemon, MCP handshake; exit 1 if unhealthy  (M2)
+catenet mcp [--no-daemon]    # MCP server over stdio; root: the opted-in repo containing $CLAUDE_PROJECT_DIR  (M2)
+catenet doctor [--json]      # node (own and on PATH), graph versions, freshness, daemon, MCP handshake, recent hook
+                             # failures; exit 1 if unhealthy  (M2, M3)
 catenet ui                   # open the visualization
 catenet eval ...             # run the benchmark harness
 ```
@@ -321,7 +361,8 @@ One long-lived process per repository, and the graph's only long-lived writer (A
   0700, so only the user can connect), named `catenet-<hash of repo path>.sock` (Windows: a named pipe, untested).
   State in `<repo>/.catenet/daemon.json`, log in `<repo>/.catenet/daemon.log`.
 - **API:** `GET /health` (version, build id, pid, watching, last index and its error), `POST /index` (`{full}`),
-  `POST /shutdown`. M3 adds the hook endpoint and a token-protected loopback TCP listener (ADR-0012).
+  `POST /shutdown`, and from M3 `POST /hook` (2.4, 2.6). There is no TCP listener (ADR-0015 dropped the loopback
+  `http` hook plan).
 - **Freshness:** a chokidar watcher that skips ignored directories signals changes, and only changes to files that can
   affect the graph count (code, manifests, tsconfig, JSON/TOML config, removed directories); logs and caches don't.
   Runs are debounced (200 ms) and serialised; changes during a run trigger exactly one follow-up run. Indexing runs in
@@ -334,7 +375,34 @@ One long-lived process per repository, and the graph's only long-lived writer (A
 - **Socket ownership:** each daemon binds a private path and renames it onto the shared one (Node deletes a unix socket
   by path when its server closes, so an exiting old daemon could otherwise delete a newer one's socket); the loser of
   a start race exits. Clients never pool connections (`agent: false`), so a request always reaches the current owner.
-- **Failure:** an index error is logged and reported by `/health` and `catenet doctor`; the daemon keeps serving.
+- **Failure:** an index error is logged and reported by `/health` and `catenet doctor`; the daemon keeps serving. If
+  `events.db` can't be opened, hooks get empty answers (retried every 30 s) and the daemon keeps serving. Request
+  bodies over 1 MB are dropped.
+- **Two installs, one daemon:** the build id is version + install (`plugin` bundle or `workspace` build) + binary
+  mtime. A client reuses a daemon of the same build or of the other install at the same version, and replaces any
+  other, so the workspace CLI and the plugin don't keep replacing each other's daemon. Stopping escalates from
+  `/shutdown` to SIGTERM to SIGKILL (a daemon whose event loop is blocked never runs its SIGTERM handler), only for a
+  process whose command line proves it is a Catenet daemon for this repo.
+
+### 2.13 Claude Code plugin (`plugins/claude-code`), M3
+One-step install (ADR-0015). Sources: `.claude-plugin/plugin.json`, `hooks/hooks.json` (exec form,
+`node ${CLAUDE_PLUGIN_ROOT}/dist/hook.mjs claude-code`), `.mcp.json` (`node ${CLAUDE_PLUGIN_ROOT}/dist/catenet.mjs mcp`).
+`pnpm build:plugin` (`scripts/build-plugin.ts`, esbuild) bundles `dist/catenet.mjs` (CLI and MCP), `daemon.mjs`,
+`index-worker.mjs`, `hook.mjs` and the tree-sitter `.wasm` files, so the plugin needs nothing outside its directory;
+runtime paths resolve next to the running bundle first, then the dev `dist/`. A plugin added from a local checkout
+runs in place from `plugins/claude-code/`; one from a hosted marketplace would be copied to Claude Code's cache (a test
+runs the bundle from such a copy). The build swaps the new `dist/` in with renames, so a running session never sees a
+half-written one; tests build into `node_modules/.cache/catenet/plugin-test/` instead.
+
+Install from a checkout (`dist/` is git-ignored, so it must be built first):
+1. `pnpm install && pnpm build:plugin`
+2. in Claude Code: `/plugin marketplace add <path to the checkout>`, then `/plugin install catenet@catenet` (or
+   `claude --plugin-dir plugins/claude-code` for one session);
+3. in each repository: `node <checkout>/plugins/claude-code/dist/catenet.mjs init` (or the workspace CLI).
+
+The hooks and MCP server run `node` from PATH, which must be Node 24+ (`catenet doctor` checks it). Installing the
+plugin changes nothing until a repository runs `catenet init`. `plugin.json`'s `version` must be bumped on every
+release, since hosted installs are cached by version.
 
 ### 2.11 Spec layer (declared intent), M6A/M6B
 Detailed in `docs/SPEC_LAYER.md`. Summary: the indexer also reads spec files (components, architecture rules, requirements, ADRs) and derives
@@ -361,12 +429,19 @@ and a requirement-risk weight. Design the `nodes.kind` / `edges.kind` columns an
 - **Performance:** latency benchmark on a synthetic 2k-file repo; assert the p95 budget in CI.
 
 ## 5. Security and privacy
-- Daemon binds to a unix socket (preferred) or loopback with a random access token generated at daemon start; no remote access.
+- Daemon listens only on a unix socket in a user-private (0700) directory; no TCP listener for hooks or MCP, no remote
+  access. (The M7 UI's transport is decided in M7; see 2.9.)
 - No network egress. No telemetry.
 - Event log redaction; opt-in for storing contents.
 - Prompt-injection hygiene for anything written into agent-visible text (guidance, injected context, error messages).
 - Policy, spec and hook files are covered by the built-in `self-protection` rule (see 2.5).
-- `.catenet/` git-ignored except `policy.yaml` (and optionally generated guidance, which lives in `AGENTS.md`).
+- `.catenet/` git-ignored except `policy.yaml`, by its own `.gitignore` written by `catenet init` (generated guidance
+  lives in `AGENTS.md`, outside it).
+- Agents are affected only in repositories that opted in with `catenet init` (`.catenet/config.json`, which is
+  git-ignored, so a cloned repository can't opt anyone in); elsewhere the plugin's hooks and MCP server do nothing.
+  Plain `catenet index` or `daemon start` creates `.catenet/` (with its `.gitignore`) but doesn't opt in.
+- Injected context quotes every repository-derived string as a JSON literal after removing control, format
+  (zero-width, bidi, tag) and line-separator characters, with per-item caps.
 
 ## 6. Later: anchored memory (M9)
 Memories are nodes of kind `memory` with anchors: `{path, symbol, region_hash, commit}`. Recall re-resolves the symbol and re-hashes:

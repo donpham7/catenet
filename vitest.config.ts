@@ -6,7 +6,7 @@ export default defineConfig({
   resolve: { conditions: ["@catenet/source"] },
   ssr: { resolve: { conditions: ["@catenet/source"] } },
   test: {
-    include: ["packages/*/test/**/*.test.ts"],
+    include: ["packages/*/test/**/*.test.ts", "packages/adapters/*/test/**/*.test.ts"],
     globalSetup: ["./scripts/vitest-build.ts"],
     testTimeout: 20_000,
   },

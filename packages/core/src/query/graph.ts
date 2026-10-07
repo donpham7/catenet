@@ -43,6 +43,16 @@ export interface Impact {
   evidence: { file: string; edges: EvidenceRow[] }[];
 }
 
+export interface ImpactSummary {
+  target: string;
+  direct: string[];
+  transitiveCount: number;
+  packageCount: number;
+  publishedApi: boolean;
+  coveredDependents: number;
+  targetCovered: boolean;
+}
+
 export interface RepoMap {
   packages: { path: string; name: string; published: boolean; files: number }[];
   directories: { path: string; files: number }[];
@@ -80,8 +90,22 @@ export class Graph {
     this.store.close();
   }
 
-  /** Accepts `path`, `path#Symbol` (qualified or short name) or a bare symbol name. */
-  resolveTarget(spec: string): ResolvedTarget {
+  /**
+   * Accepts `path`, `path#Symbol` (qualified or short name) or a bare symbol name. With `fileOnly`, `spec` is a file
+   * path and nothing else: no `#` parsing and no symbol-name fallback (hooks pass the path an agent is editing).
+   */
+  resolveTarget(spec: string, opts: { fileOnly?: boolean } = {}): ResolvedTarget {
+    if (opts.fileOnly) {
+      const path = posix.normalize(spec).replace(/^\.\//, "");
+      const file = this.store.fileNode(path);
+      if (!file) throw new TargetError(`no file "${path}" in the graph`);
+      return {
+        id: path,
+        path,
+        symbol: null,
+        nodeIds: [file.id, ...this.store.symbolsOf(path).map((s) => s.id)],
+      };
+    }
     const hash = spec.indexOf("#");
     const rawPath = hash >= 0 ? spec.slice(0, hash) : spec;
     const path = posix.normalize(rawPath).replace(/^\.\//, "");
@@ -222,6 +246,44 @@ export class Graph {
         edges: this.store.evidence(target.nodeIds, d.file).slice(0, 3),
       })),
     };
+  }
+
+  /**
+   * The counts behind injected context, computed in one query instead of impact()'s full evidence walk (it sits on
+   * the PreToolUse hook path). Numbers are identical to impact()'s; a test enforces that.
+   */
+  impactSummary(spec: string, opts: { fileOnly?: boolean } = {}): ImpactSummary {
+    const target = this.resolveTarget(spec, opts);
+    const direct = this.store
+      .directDependents(target.nodeIds, target.path)
+      .map((r) => r.path)
+      .sort((a, b) => a.localeCompare(b));
+    const stats = this.store.closureStats(direct, target.path);
+    return {
+      target: target.id,
+      direct,
+      transitiveCount: stats.transitive,
+      packageCount: stats.packages,
+      publishedApi: this.isPublished(target),
+      coveredDependents: stats.covered,
+      targetCovered: this.isTargetCovered(target),
+    };
+  }
+
+  private isPublished(target: ResolvedTarget): boolean {
+    const symbols = this.store.symbolsOf(target.path);
+    if (target.symbol === null) {
+      return [this.store.fileNode(target.path), ...symbols].some(
+        (r) => r !== undefined && attrs(r).published_api === true,
+      );
+    }
+    return symbols.some((s) => target.nodeIds.includes(s.id) && attrs(s).published_api === true);
+  }
+
+  private isTargetCovered(target: ResolvedTarget): boolean {
+    if (target.symbol === null) return this.store.testedPaths().has(target.path);
+    const tested = this.store.testedNodeIds();
+    return target.nodeIds.some((id) => tested.has(id));
   }
 
   /** Test files with a static `tests` edge to the target (ADR-0002: static, not runtime coverage). */

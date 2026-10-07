@@ -1,8 +1,18 @@
 // `catenet doctor` (ROADMAP M2): accurate healthy/unhealthy report. Unhealthy = any check fails; warnings don't fail.
-import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultDbPath, EXTRACTOR_VERSION, openGraph, pendingChanges, SCHEMA_VERSION } from "@catenet/core";
-import { buildId, daemonStatus, health, socketPath } from "@catenet/daemon";
+import {
+  defaultDbPath,
+  EXTRACTOR_VERSION,
+  HOOK_ERRORS_LOG,
+  isOptedIn,
+  openGraph,
+  pendingChanges,
+  SCHEMA_VERSION,
+} from "@catenet/core";
+import { acceptsBuild, buildId, daemonStatus, health, socketPath } from "@catenet/daemon";
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 
@@ -18,8 +28,11 @@ export interface DoctorReport {
   checks: Check[];
 }
 
-/** The built CLI entry, used for the MCP handshake. Resolves to dist/ from both src/ and dist/. */
-const CLI_MAIN = fileURLToPath(new URL("../dist/main.js", import.meta.url));
+/** The built CLI entry for the MCP handshake: catenet.mjs in the plugin bundle, else the package's dist/. */
+const HERE = dirname(fileURLToPath(import.meta.url));
+const CLI_MAIN = existsSync(join(HERE, "catenet.mjs"))
+  ? join(HERE, "catenet.mjs")
+  : fileURLToPath(new URL("../dist/main.js", import.meta.url));
 export const EXPECTED_TOOLS = [
   "find_symbol",
   "get_dependencies",
@@ -39,6 +52,53 @@ const ago = (iso: string | null) => {
       ? `${Math.round(s / 60)} min ago`
       : `${Math.round(s / 3600)} h ago`;
 };
+
+/** The `node` Claude Code will run for the plugin (plain `node` from PATH), which may not be the one running us. */
+function nodeOnPathCheck(): Check {
+  let version: string;
+  try {
+    version = execFileSync("node", ["--version"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 5000,
+    }).trim();
+  } catch {
+    return {
+      name: "node on PATH",
+      status: "warn",
+      detail: "no `node` on PATH: the Claude Code plugin's hooks and MCP server can't run",
+    };
+  }
+  const major = Number(version.replace(/^v/, "").split(".")[0]);
+  return major >= 24
+    ? { name: "node on PATH", status: "ok", detail: `${version} (used by the Claude Code plugin)` }
+    : {
+        name: "node on PATH",
+        status: "warn",
+        detail: `${version}: the Claude Code plugin runs \`node\` from PATH and needs Node 24+, so it will do nothing; put Node 24 first on PATH`,
+      };
+}
+
+/** Hook failures logged by the hook client in the last 24 hours (they never reach the agent, so surface them here). */
+function hookErrorsCheck(root: string): Check {
+  const log = join(root, ".catenet", HOOK_ERRORS_LOG);
+  let lines: string[] = [];
+  try {
+    lines = readFileSync(log, "utf8").split("\n").filter(Boolean);
+  } catch {
+    // No log: no failures.
+  }
+  const since = Date.now() - 86_400_000;
+  const recent = lines.filter((l) => Date.parse(l.split("\t")[0] ?? "") >= since);
+  if (recent.length === 0)
+    return { name: "hooks", status: "ok", detail: "no hook failures in the last 24 h" };
+  const last = (recent[recent.length - 1] ?? "").split("\t");
+  return {
+    name: "hooks",
+    status: "warn",
+    detail: `${recent.length} hook failure(s) in the last 24 h; last: ${last[1] ?? "?"} ${last[3] ?? ""} (${log})`,
+  };
+}
 
 async function mcpHandshake(root: string): Promise<Check> {
   const client = new Client({ name: "catenet-doctor", version: "0.1.0" });
@@ -80,6 +140,8 @@ export async function runDoctor(root: string, opts: { mcp?: boolean } = {}): Pro
           detail: `Node ${process.versions.node}; Catenet needs Node 24+ (ADR-0005)`,
         },
   );
+  checks.push(nodeOnPathCheck());
+  if (isOptedIn(root)) checks.push(hookErrorsCheck(root));
 
   const dbPath = defaultDbPath(root);
   let graphOk = false;
@@ -132,7 +194,7 @@ export async function runDoctor(root: string, opts: { mcp?: boolean } = {}): Pro
       status: "fail",
       detail: `pid ${h.pid}: last index failed: ${h.lastIndex.error}`,
     });
-  } else if (h.buildId !== buildId()) {
+  } else if (!acceptsBuild(h.buildId, buildId())) {
     checks.push({
       name: "daemon",
       status: "warn",

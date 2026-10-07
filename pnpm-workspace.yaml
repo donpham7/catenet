@@ -1,5 +1,6 @@
 packages:
   - packages/*
+  - packages/adapters/*
   - spikes
 
 # pnpm 12 fails installs on unreviewed dependency build scripts. Every package with an install script must be
@@ -10,3 +11,5 @@ allowBuilds:
   tree-sitter-typescript: false
   tree-sitter-javascript: false
   tree-sitter-python: false
+  # esbuild (dev only, builds the Claude Code plugin bundle; ADR-0015): its install script verifies the platform binary.
+  esbuild: true

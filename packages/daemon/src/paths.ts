@@ -4,14 +4,24 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CATENET_VERSION } from "@catenet/core";
 
-/** The daemon process entry. Resolves to dist/ from both src/ and dist/ (each is one level below the package). */
-export const DAEMON_MAIN = fileURLToPath(new URL("../dist/main.js", import.meta.url));
-/** The indexing worker thread entry (same dist/ resolution as DAEMON_MAIN). */
-export const INDEX_WORKER = fileURLToPath(new URL("../dist/index-worker.js", import.meta.url));
+/**
+ * Built entry points. In the plugin bundle every entry sits in one flat dist/ directory (daemon.mjs,
+ * index-worker.mjs next to this code); in the workspace they are the package's own dist/ (one level above src/ and
+ * dist/ alike). The bundle layout is checked first (ADR-0015).
+ */
+const HERE = dirname(fileURLToPath(import.meta.url));
+const bundled = (name: string) => (existsSync(join(HERE, name)) ? join(HERE, name) : null);
+export const DAEMON_MAIN =
+  bundled("daemon.mjs") ?? fileURLToPath(new URL("../dist/main.js", import.meta.url));
+export const INDEX_WORKER =
+  bundled("index-worker.mjs") ?? fileURLToPath(new URL("../dist/index-worker.js", import.meta.url));
+
+/** The daemon entry of either install: the plugin bundle's daemon.mjs or the workspace's daemon/dist/main.js. */
+const DAEMON_BINARY = /[\\/](?:daemon\.mjs|daemon[\\/]dist[\\/]main\.js) --root /;
 
 /**
  * True only if `pid` is a Catenet daemon for `root`: its command line runs our daemon binary with this root. A pid
@@ -24,7 +34,9 @@ export function isOurDaemon(pid: number, root: string): boolean {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
-    return command.includes(DAEMON_MAIN) && (command.includes(root) || command.includes(canonicalRoot(root)));
+    // Either install's daemon counts (the workspace build or the plugin bundle), so one can stop the other.
+    const daemonBinary = command.includes(DAEMON_MAIN) || DAEMON_BINARY.test(command);
+    return daemonBinary && (command.includes(root) || command.includes(canonicalRoot(root)));
   } catch {
     return false;
   }
@@ -58,14 +70,27 @@ export const stateFile = (root: string) => join(root, ".catenet", "daemon.json")
 export const logFile = (root: string) => join(root, ".catenet", "daemon.log");
 
 /**
- * Identifies the daemon build: version plus the daemon binary's modification time, so a rebuilt Catenet replaces a
- * daemon still running old code.
+ * Identifies the daemon build: version, install flavour (the plugin bundle or the workspace build) and the daemon
+ * binary's modification time, so a rebuilt Catenet replaces a daemon still running old code.
  */
 export function buildId(main = DAEMON_MAIN): string {
   const mtime = existsSync(main) ? statSync(main).mtimeMs : 0;
+  const flavour = main.endsWith(".mjs") ? "plugin" : "workspace";
   // CATENET_BUILD_SALT lets tests simulate a different build without touching the shared dist/ binary.
   const salt = process.env.CATENET_BUILD_SALT ? `+${process.env.CATENET_BUILD_SALT}` : "";
-  return `${CATENET_VERSION}+${Math.trunc(mtime)}${salt}`;
+  return `${CATENET_VERSION}+${flavour}+${Math.trunc(mtime)}${salt}`;
+}
+
+/**
+ * Whether a client of build `mine` should use a daemon running build `running` rather than replace it. The same
+ * build, or the same version from the other install (the workspace CLI and the plugin bundle serve the same API and
+ * would otherwise keep replacing each other's daemon). A rebuild of the same install, or another version, replaces.
+ */
+export function acceptsBuild(running: string, mine: string): boolean {
+  if (running === mine) return true;
+  const [runVersion, runFlavour] = running.split("+");
+  const [myVersion, myFlavour] = mine.split("+");
+  return runVersion === myVersion && runFlavour !== myFlavour;
 }
 
 export interface DaemonState {

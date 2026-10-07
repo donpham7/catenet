@@ -40,7 +40,7 @@ We are **not** building a coding agent, a chat-app plugin, or a graph editor.
 - TypeScript, Node 24+ (ADR-0005), strict mode. pnpm workspace (version pinned via `packageManager`, installed with corepack).
 - SQLite via built-in `node:sqlite` (WAL mode, ADR-0010). Graph = `nodes` + `edges` tables; traversal with recursive CTEs.
 - Tree-sitter via `web-tree-sitter` + grammar `.wasm` files (ADR-0011; v1 languages: TypeScript/JavaScript, Python).
-- Hooks: Claude Code `http` hooks for tool events, a plain-JS Node command client elsewhere (ADR-0012).
+- Hooks: command hooks running a plain-JS Node client everywhere; recording hooks are async (ADR-0015).
 - Tooling: TypeScript 7 `tsc`, Biome (lint + format), Vitest 5 (ADR-0009). No native dependencies.
 - MCP server via the official MCP TypeScript SDK v2, `@modelcontextprotocol/server` (stdio transport first).
 - UI: local web app on 127.0.0.1 only, Sigma.js + graphology, read-only.
@@ -51,7 +51,7 @@ We are **not** building a coding agent, a chat-app plugin, or a graph editor.
 packages/
   core/        graph store, indexer, query engine, blast radius, policy engine
   parsers/     tree-sitter language modules (ts-js, python)
-  daemon/      long-lived local process (unix socket / loopback HTTP), file watcher
+  daemon/      long-lived local process (HTTP over a unix socket), file watcher
   cli/         `catenet` CLI (index, impact, why, guidance, doctor, ui)
   mcp/         MCP server exposing read-only graph tools
   adapters/
@@ -83,10 +83,12 @@ pnpm install          # pnpm 12; dependency build scripts must be listed in pnpm
 pnpm build            # tsc for each package under packages/
 pnpm typecheck        # tsc --noEmit for packages/ and spikes/
 pnpm lint             # biome check (pnpm format to auto-fix)
-pnpm test             # vitest run
+pnpm test             # vitest run (global setup builds packages and the plugin first)
+pnpm build:plugin     # bundle plugins/claude-code/dist (esbuild); needed for the Claude Code plugin
 pnpm --filter @catenet/core bench                     # M1 indexing benchmark (results: packages/core/bench/RESULTS.md)
 node packages/cli/dist/main.js index --repo <dir>     # after pnpm build; also deps|dependents|impact <target>
 node packages/cli/dist/main.js daemon start|stop|status --repo <dir>
 node packages/cli/dist/main.js doctor --repo <dir>
-claude mcp add catenet -- node <abs path>/packages/cli/dist/main.js mcp --repo <dir>   # use the MCP tools in Claude Code
+node packages/cli/dist/main.js init --repo <dir>      # opt a repo in (.catenet/, index, daemon); then report [--session last|<id>] [--json]
+claude --plugin-dir plugins/claude-code               # one session with the Catenet plugin (hooks + MCP), after build:plugin
 ```

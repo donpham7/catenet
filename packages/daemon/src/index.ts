@@ -1,5 +1,6 @@
 // @catenet/daemon: per-repo long-lived writer of graph.db (ADR-0014).
 export { call, type HealthResponse, health } from "./client.js";
+export { HookHandler, type HookRequest } from "./hooks.js";
 export {
   daemonStatus,
   type EnsureResult,
@@ -11,6 +12,7 @@ export {
   stopDaemon,
 } from "./lifecycle.js";
 export {
+  acceptsBuild,
   buildId,
   DAEMON_MAIN,
   type DaemonState,

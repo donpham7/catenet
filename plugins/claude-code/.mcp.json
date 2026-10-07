@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "catenet": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/catenet.mjs", "mcp"]
+    }
+  }
+}

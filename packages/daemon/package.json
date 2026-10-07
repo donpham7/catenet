@@ -17,6 +17,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@catenet/adapter-claude-code": "workspace:*",
     "@catenet/core": "workspace:*",
     "chokidar": "5.0.0"
   }

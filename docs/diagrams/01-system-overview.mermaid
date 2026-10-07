@@ -1,0 +1,64 @@
+flowchart TB
+  subgraph Agents["Coding agents"]
+    CC["Claude Code"]
+    CX["Codex CLI"]
+  end
+
+  subgraph Adapters["Adapters (thin, no business logic)"]
+    ACC["claude-code adapter<br/>hooks + plugin"]
+    ACX["codex adapter<br/>hooks config"]
+  end
+
+  MCP["MCP server<br/>read-only tools"]
+
+  subgraph Daemon["Catenet daemon (local, long-lived)"]
+    API["Local API<br/>unix socket"]
+    IDX["Indexer<br/>tree-sitter + file watcher"]
+    SPEC["Spec loader<br/>components, architecture rules,<br/>requirements (M6A/M6B)"]
+    QE["Query engine<br/>deps, blast radius, hotspots"]
+    POL["Policy engine<br/>rules, on_match, evidence"]
+    REC["Event recorder"]
+    GEN["Guidance generator<br/>+ drift check"]
+    UIS["UI server<br/>read-only, SSE"]
+  end
+
+  subgraph Store["SQLite in .catenet/"]
+    GDB[("graph.db<br/>derived, rebuildable")]
+    EDB[("events.db")]
+  end
+
+  subgraph Repo["Repository (source of truth, edited in git)"]
+    CODE["Source code"]
+    SPECF["Spec files<br/>catenet.spec.yaml, ADRs"]
+    POLF["policy.yaml"]
+    AGMD["AGENTS.md<br/>human text + generated blocks"]
+  end
+
+  BROWSER["Browser<br/>blast-radius map"]
+
+  CC -- hooks --> ACC
+  CX -- hooks --> ACX
+  CC -. MCP .-> MCP
+  CX -. MCP .-> MCP
+
+  ACC -- "events / decisions" --> API
+  ACX -- "events / decisions" --> API
+  MCP --> QE
+
+  API --> POL
+  API --> REC
+  POL --> QE
+  QE --> GDB
+  IDX --> GDB
+  SPEC --> GDB
+  REC --> EDB
+
+  CODE --> IDX
+  SPECF --> SPEC
+  POLF --> POL
+  GEN --> QE
+  GEN -- "rewrites marked blocks only" --> AGMD
+
+  UIS --> QE
+  UIS --> EDB
+  BROWSER --> UIS

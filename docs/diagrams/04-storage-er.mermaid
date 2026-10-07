@@ -1,0 +1,96 @@
+erDiagram
+  NODES {
+    int id PK
+    string kind "repo|package|file|symbol|external|component|requirement|arch_rule|adr"
+    string subkind "file: source|test; symbol: function|class|method|...|test_case"
+    string name
+    string path
+    int start_line
+    int end_line
+    string lang
+    string content_hash
+    string attrs "JSON"
+    int updated_at
+  }
+  EDGES {
+    int src FK
+    int dst FK
+    string kind "contains|imports|calls|references|inherits|tests|depends_on|belongs_to|component_depends_on|satisfies|verifies|governs|decided_by|refines"
+    string confidence "exact|heuristic"
+    string provenance "parser|declared|tagged|inferred"
+    string attrs "JSON"
+  }
+  METRICS {
+    int node_id FK
+    float fan_in
+    float fan_out
+    string role "hub|core|leaf"
+    float hotspot_score
+  }
+  GRAPH_META {
+    int schema_version
+  }
+  NODES ||--o{ EDGES : "src"
+  NODES ||--o{ EDGES : "dst"
+  NODES ||--o| METRICS : "cached, rebuildable"
+
+  SESSIONS {
+    string id PK
+    string agent "claude-code|codex"
+    string agent_version
+    int started_at
+    int ended_at
+    string cwd
+    string git_head
+  }
+  PROMPTS {
+    string id PK
+    string session_id FK
+    int ts
+    string text_hash
+    string text_preview_redacted
+  }
+  TOOL_CALLS {
+    string id PK
+    string session_id FK
+    int ts
+    string tool
+    string target_paths "JSON"
+    string args_summary "redacted"
+    string outcome
+    int duration_ms
+  }
+  DECISIONS {
+    string id PK
+    string session_id FK
+    string tool_call_id FK "nullable (post-edit violations)"
+    int ts
+    string verdict "allow|ask|deny"
+    string rule_ids "JSON"
+    string evidence "JSON: matched rules + on_match + caps"
+    int latency_ms
+  }
+  DIFFS {
+    string id PK
+    string session_id FK
+    int ts
+    string path
+    int added
+    int removed
+    string content_hash_before
+    string content_hash_after
+  }
+  ERRORS {
+    int id PK
+    int ts
+    string subsystem
+    string message
+  }
+  EVENTS_META {
+    int schema_version
+  }
+  SESSIONS ||--o{ PROMPTS : has
+  SESSIONS ||--o{ TOOL_CALLS : has
+  SESSIONS ||--o{ DECISIONS : has
+  SESSIONS ||--o{ DIFFS : has
+  TOOL_CALLS ||--o| DECISIONS : "gated by"

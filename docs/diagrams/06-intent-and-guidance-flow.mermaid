@@ -1,0 +1,25 @@
+flowchart LR
+  subgraph Git["Repository files (humans edit, reviewed in git)"]
+    SRC["Source code"]
+    SPECF["Spec files<br/>components, architecture rules,<br/>requirements, ADRs"]
+    AG["AGENTS.md<br/>human text + generated blocks"]
+  end
+
+  SRC --> IDX["Indexer"]
+  SPECF --> LOAD["Spec loader + import adapters"]
+  IDX --> G[("Derived graph<br/>read-only")]
+  LOAD --> G
+
+  G --> GEN["Guidance generator"]
+  GEN -- "rewrites marked blocks only" --> AG
+
+  G --> CHK["Drift checks<br/>guidance and spec"]
+  AG --> CHK
+  SPECF --> CHK
+  CHK --> OUT["CLI, CI report, UI"]
+
+  G --> CTX["Per-file context injection<br/>architecture + requirements"]
+  CTX --> AGENT["Coding agent"]
+
+  AGENT -. "drafts via /catenet-spec" .-> PROP["Proposals<br/>.catenet/proposals/"]
+  PROP -- "human reviews and accepts" --> SPECF

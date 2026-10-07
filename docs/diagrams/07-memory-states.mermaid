@@ -1,0 +1,15 @@
+stateDiagram-v2
+  [*] --> Fresh: remember(anchor)
+  Fresh --> Stale: anchored code changed
+  Stale --> Fresh: re-anchored after review
+  Fresh --> Orphaned: file or symbol deleted
+  Stale --> Orphaned: file or symbol deleted
+  Fresh --> Superseded: contradicted by newer memory
+  Stale --> Superseded: contradicted by newer memory
+  Orphaned --> [*]
+  Superseded --> [*]
+  note right of Fresh
+    Whitespace-only changes and moved
+    symbols keep a memory fresh
+    (anchor re-resolved by symbol, then hashed)
+  end note

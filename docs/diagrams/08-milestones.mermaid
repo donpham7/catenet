@@ -1,0 +1,20 @@
+flowchart LR
+  M0["M0<br/>spike, schemas, fixtures"] --> M1["M1<br/>code graph indexer"]
+  M1 --> M2["M2<br/>MCP server + daemon"]
+  M2 --> M3["M3<br/>events + Claude Code hooks<br/>(record only)"]
+  M3 --> M4["M4<br/>evaluation harness"]
+  M4 --> M5["M5<br/>safety gate"]
+  M5 --> M6["M6<br/>guidance + drift check"]
+  M5 --> M6A["M6A<br/>architecture rules"]
+  M6A --> M6B["M6B<br/>requirements traceability"]
+  M3 --> M7["M7<br/>visualization v1"]
+  M5 --> M7
+  M3 --> M8["M8<br/>Codex adapter"]
+  M5 --> M8
+  M2 --> M9["M9<br/>anchored memory<br/>(post-MVP)"]
+  M3 --> M9
+
+  classDef mvp fill:#e8f1ff,stroke:#2b5fb3,color:#111
+  classDef later fill:#f4f4f4,stroke:#888,color:#111,stroke-dasharray: 4 3
+  class M0,M1,M2,M3,M4,M5,M6,M7,M8 mvp
+  class M6A,M6B,M9 later

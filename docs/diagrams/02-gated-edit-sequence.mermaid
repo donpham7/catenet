@@ -1,0 +1,37 @@
+sequenceDiagram
+  autonumber
+  participant A as Agent
+  participant H as Hook adapter
+  participant D as Daemon
+  participant G as Graph (SQLite)
+  participant P as Policy engine
+  participant E as Event log
+
+  A->>H: PreToolUse (Edit lib/format.ts)
+  H->>D: neutral event {tool, paths, session}
+
+  alt daemon down, slow (over time budget) or error
+    D--xH: no response
+    H-->>A: allow (fail-open), error logged
+  else normal path
+    D->>G: resolve file to node, load impact
+    G-->>D: dependents, tests, component, requirements
+    D->>P: evaluate matching rules
+    P-->>D: verdict + evidence
+    D->>E: record decision
+    D-->>H: verdict + additional context
+    H-->>A: allow / ask / deny + dependents and tests
+  end
+
+  opt edit proceeds (allowed or human approved)
+    A->>A: apply edit
+    A->>H: PostToolUse
+    H->>D: diff stats
+    D->>G: incremental reindex of the file
+    D->>P: check architecture rule violations
+    D->>E: record diff and outcome
+    opt violation introduced
+      D-->>H: violation evidence
+      H-->>A: feedback so the agent can fix it
+    end
+  end

@@ -1,0 +1,40 @@
+flowchart LR
+  subgraph Derived["Derived from code (indexer)"]
+    repo["repo"]
+    package["package"]
+    file["file"]
+    symbol["symbol"]
+    testfile["file<br/>(subkind: test)"]
+    testcase["symbol<br/>(subkind: test_case)"]
+    external["external dependency"]
+    repo -->|contains| package
+    package -->|contains| file
+    file -->|contains| symbol
+    file -->|imports| file
+    symbol -->|calls| symbol
+    symbol -->|references| symbol
+    symbol -->|inherits| symbol
+    file -->|depends_on| external
+    testfile -->|contains| testcase
+    testfile -->|tests| symbol
+    testfile -->|tests| file
+    testcase -->|tests| symbol
+  end
+
+  subgraph Declared["Declared intent from spec files (M6A/M6B)"]
+    component["component"]
+    requirement["requirement"]
+    arch_rule["arch_rule"]
+    adr["adr"]
+    component -->|component_depends_on<br/>derived rollup| component
+    requirement -->|refines| requirement
+    arch_rule -->|governs| component
+    arch_rule -->|decided_by| adr
+  end
+
+  file -->|belongs_to| component
+  symbol -->|satisfies| requirement
+  file -->|satisfies| requirement
+  component -->|satisfies| requirement
+  testfile -->|verifies| requirement
+  testcase -->|verifies| requirement

@@ -1,0 +1,19 @@
+flowchart TD
+  A["Tool call event from adapter"] --> B{"Daemon reachable<br/>and within time budget?"}
+  B -- no --> F["Allow and log error<br/>(fail-open)"]
+  B -- yes --> C["Resolve target paths to graph nodes<br/>and compute impact"]
+  C --> D["Evaluate each rule's match<br/>(paths, tools, impact, spec)"]
+  D --> E{"Any rule matched?"}
+  E -- no --> AL["Allow"]
+  E -- yes --> CAP["Apply engine caps<br/>inferred edges: at most ask_human<br/>off-task: at most tell_agent"]
+  CAP --> S{"Strongest on_match"}
+  S -- record_only --> O["Allow<br/>(agent sees nothing)"]
+  S -- tell_agent --> W["Allow<br/>+ explanation to agent"]
+  S -- ask_human --> Q["Ask<br/>(human approves or rejects)"]
+  S -- block --> X["Deny<br/>+ reason and alternative"]
+
+  AL --> R["Record decision + evidence<br/>(catenet why shows this)"]
+  O --> R
+  W --> R
+  Q --> R
+  X --> R

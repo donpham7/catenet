@@ -1,0 +1,12 @@
+packages:
+  - packages/*
+  - spikes
+
+# pnpm 12 fails installs on unreviewed dependency build scripts. Every package with an install script must be
+# listed here with a reason. (ADR-0009)
+allowBuilds:
+  # Grammar packages ship a native binding (install: node-gyp-build) AND a .wasm file. Catenet uses only the
+  # .wasm with web-tree-sitter (ADR-0011), so the native build is never needed.
+  tree-sitter-typescript: false
+  tree-sitter-javascript: false
+  tree-sitter-python: false

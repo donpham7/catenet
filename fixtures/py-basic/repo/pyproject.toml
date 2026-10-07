@@ -1,0 +1,5 @@
+[project]
+name = "pybasic"
+version = "1.0.0"
+description = "Catenet fixture: single published Python project with seeded hidden dependencies."
+dependencies = ["requests>=2"]

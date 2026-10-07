@@ -1,0 +1,10 @@
+{
+  "name": "web",
+  "private": true,
+  "dependencies": {
+    "@acme/ui": "workspace:*",
+    "@acme/utils": "workspace:*",
+    "react": "^19.0.0"
+  },
+  "devDependencies": { "vitest": "^5.0.0" }
+}

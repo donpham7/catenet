@@ -1,0 +1,219 @@
+{
+  "fixture": "py-basic",
+  "definitions": "docs/DECISIONS.md ADR-0002, ADR-0008",
+  "packages": [
+    {
+      "path": ".",
+      "name": "pybasic",
+      "published": true
+    }
+  ],
+  "externals": [
+    {
+      "from": "pybasic/net.py",
+      "specifier": "requests",
+      "subkind": "third_party"
+    },
+    {
+      "from": "pybasic/plugins/loader.py",
+      "specifier": "importlib",
+      "subkind": "builtin"
+    },
+    {
+      "from": "pybasic/plugins/loader.py",
+      "specifier": "f\"pybasic.plugins.{name}\"",
+      "subkind": "unresolved"
+    }
+  ],
+  "protected_path_candidates": [],
+  "targets": [
+    {
+      "target": "pybasic/core/money.py",
+      "published_api": true,
+      "target_covered": true,
+      "direct": [
+        {
+          "file": "pybasic/__init__.py",
+          "confidence": "exact",
+          "via": "from .core.money import format_currency"
+        },
+        {
+          "file": "pybasic/billing/invoice.py",
+          "confidence": "exact",
+          "via": "import pybasic.core.money as m; m.format_currency"
+        },
+        {
+          "file": "pybasic/core/__init__.py",
+          "confidence": "exact",
+          "via": "from .money import format_currency, round_amount"
+        },
+        {
+          "file": "pybasic/plugins/csv_export.py",
+          "confidence": "exact",
+          "via": "from pybasic.core.money import format_currency"
+        },
+        {
+          "file": "pybasic/reports/report.py",
+          "confidence": "exact",
+          "via": "format_currency resolved through package re-export"
+        },
+        {
+          "file": "pybasic/reports/summary.py",
+          "confidence": "exact",
+          "via": "from pybasic.core.money import * (__all__)"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "pybasic/__init__.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/billing/invoice.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/core/__init__.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/plugins/csv_export.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/plugins/loader.py",
+          "confidence": "heuristic"
+        },
+        {
+          "file": "pybasic/reports/report.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/reports/summary.py",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "pybasic/reports/report.py"
+      ],
+      "notes": "loader.py is reachable only through a heuristic importlib edge. Implicit parent-package imports (importing pybasic.core.money also runs pybasic/core/__init__.py) are NOT modeled as edges."
+    },
+    {
+      "target": "pybasic/core/money.py#format_currency",
+      "published_api": true,
+      "target_covered": true,
+      "direct": [
+        {
+          "file": "pybasic/__init__.py",
+          "confidence": "exact",
+          "via": "imports and re-exports format_currency (__all__)"
+        },
+        {
+          "file": "pybasic/billing/invoice.py",
+          "confidence": "exact",
+          "via": "m.format_currency attribute access"
+        },
+        {
+          "file": "pybasic/core/__init__.py",
+          "confidence": "exact",
+          "via": "re-exports format_currency"
+        },
+        {
+          "file": "pybasic/plugins/csv_export.py",
+          "confidence": "exact",
+          "via": "calls format_currency"
+        },
+        {
+          "file": "pybasic/reports/report.py",
+          "confidence": "exact",
+          "via": "calls format_currency via ..core re-export"
+        },
+        {
+          "file": "pybasic/reports/summary.py",
+          "confidence": "exact",
+          "via": "star import, then calls format_currency"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "pybasic/__init__.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/billing/invoice.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/core/__init__.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/plugins/csv_export.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/plugins/loader.py",
+          "confidence": "heuristic"
+        },
+        {
+          "file": "pybasic/reports/report.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/reports/summary.py",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "pybasic/reports/report.py"
+      ],
+      "notes": "round_amount is not part of this target."
+    },
+    {
+      "target": "pybasic/reports/base.py",
+      "published_api": false,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "pybasic/reports/report.py",
+          "confidence": "exact",
+          "via": "import + inherits BaseReport"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "pybasic/__init__.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "pybasic/reports/report.py",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "pybasic/reports/report.py"
+      ],
+      "notes": "Inheritance edge; BaseReport is not in the top-level __all__."
+    },
+    {
+      "target": "pybasic/core/dates.py",
+      "published_api": false,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "pybasic/billing/compat.py",
+          "confidence": "exact",
+          "via": "import inside try/except"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "pybasic/billing/compat.py",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [],
+      "notes": "Dependency declared inside try/except ImportError."
+    }
+  ]
+}

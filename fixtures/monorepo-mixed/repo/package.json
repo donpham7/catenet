@@ -1,0 +1,5 @@
+{
+  "name": "acme-monorepo",
+  "private": true,
+  "description": "Catenet fixture: pnpm monorepo (published + private TS packages) plus a Python service."
+}

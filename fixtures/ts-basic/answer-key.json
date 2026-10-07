@@ -1,0 +1,380 @@
+{
+  "fixture": "ts-basic",
+  "definitions": "docs/DECISIONS.md ADR-0002, ADR-0008",
+  "packages": [
+    {
+      "path": ".",
+      "name": "ts-basic-lib",
+      "published": true
+    }
+  ],
+  "externals": [
+    {
+      "from": "src/vendor.ts",
+      "specifier": "lodash",
+      "subkind": "third_party"
+    },
+    {
+      "from": "src/plugins/loader.ts",
+      "specifier": "./${name}",
+      "subkind": "unresolved"
+    },
+    {
+      "from": "test/format.test.ts",
+      "specifier": "vitest",
+      "subkind": "third_party"
+    },
+    {
+      "from": "test/widget.test.ts",
+      "specifier": "vitest",
+      "subkind": "third_party"
+    }
+  ],
+  "protected_path_candidates": [],
+  "targets": [
+    {
+      "target": "src/lib/format.ts",
+      "published_api": true,
+      "target_covered": true,
+      "direct": [
+        {
+          "file": "src/checkout/receipt-format.ts",
+          "confidence": "exact",
+          "via": "tsconfig alias; uses formatDate"
+        },
+        {
+          "file": "src/checkout/summary.ts",
+          "confidence": "exact",
+          "via": "lib.formatCurrency resolved through namespace + barrel"
+        },
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact",
+          "via": "calls formatCurrency resolved through barrel"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact",
+          "via": "export { formatCurrency as money }"
+        },
+        {
+          "file": "src/legacy/report.cjs",
+          "confidence": "exact",
+          "via": "require(\"../lib/format\")"
+        },
+        {
+          "file": "src/lib/index.ts",
+          "confidence": "exact",
+          "via": "export * from ./format"
+        },
+        {
+          "file": "src/plugins/csv.ts",
+          "confidence": "exact",
+          "via": "import { formatCurrency }"
+        },
+        {
+          "file": "src/ui/widget.ts",
+          "confidence": "exact",
+          "via": "tsconfig alias @/lib/format; calls formatCurrency"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/checkout/receipt-format.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/receipt.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/summary.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/legacy/report.cjs",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/lib/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/plugins/csv.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/plugins/loader.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/ui/widget.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "src/lib/index.ts",
+        "src/ui/widget.ts"
+      ],
+      "notes": "Hub file. total.ts and summary.ts are DIRECT: they call formatCurrency, resolved through the barrel. receipt-format.ts uses only formatDate but still depends on the file."
+    },
+    {
+      "target": "src/lib/format.ts#formatCurrency",
+      "published_api": true,
+      "target_covered": true,
+      "direct": [
+        {
+          "file": "src/checkout/summary.ts",
+          "confidence": "exact",
+          "via": "lib.formatCurrency through namespace import"
+        },
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact",
+          "via": "calls formatCurrency through barrel"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact",
+          "via": "export * from ./lib; export { formatCurrency as money }"
+        },
+        {
+          "file": "src/legacy/report.cjs",
+          "confidence": "exact",
+          "via": "require destructuring"
+        },
+        {
+          "file": "src/lib/index.ts",
+          "confidence": "exact",
+          "via": "export * from ./format (re-exports formatCurrency)"
+        },
+        {
+          "file": "src/plugins/csv.ts",
+          "confidence": "exact",
+          "via": "references formatCurrency"
+        },
+        {
+          "file": "src/ui/widget.ts",
+          "confidence": "exact",
+          "via": "calls formatCurrency (tsconfig alias)"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/checkout/receipt.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/summary.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/legacy/report.cjs",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/lib/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/plugins/csv.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/plugins/loader.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/ui/widget.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "src/lib/index.ts",
+        "src/ui/widget.ts"
+      ],
+      "notes": "Symbol target: receipt-format.ts is NOT a dependent (uses formatDate only). Barrels that re-export the symbol are dependents."
+    },
+    {
+      "target": "src/lib/math.ts",
+      "published_api": true,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "src/cycle/a.ts",
+          "confidence": "exact",
+          "via": "import { round }"
+        },
+        {
+          "file": "src/lib/format.ts",
+          "confidence": "exact",
+          "via": "import { round }"
+        },
+        {
+          "file": "src/lib/index.ts",
+          "confidence": "exact",
+          "via": "export * from ./math"
+        },
+        {
+          "file": "src/polyfills.ts",
+          "confidence": "exact",
+          "via": "import { clamp }"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/checkout/receipt-format.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/receipt.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/summary.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/cycle/a.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/cycle/b.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/legacy/report.cjs",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/lib/format.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/lib/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/plugins/csv.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/plugins/loader.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/polyfills.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/setup.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/ui/widget.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "src/lib/format.ts",
+        "src/lib/index.ts",
+        "src/ui/widget.ts"
+      ],
+      "notes": "Published via export * chain (src/index.ts -> lib/index.ts -> math.ts). setup.ts reaches it only through a side-effect import of polyfills.ts. Cycle a<->b included."
+    },
+    {
+      "target": "src/ui/base.ts",
+      "published_api": false,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "src/ui/widget.ts",
+          "confidence": "exact",
+          "via": "import + extends BaseWidget"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/ui/widget.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "src/ui/widget.ts"
+      ],
+      "notes": "Inheritance edge. BaseWidget is not exported from the entry point."
+    },
+    {
+      "target": "src/lib/types.ts",
+      "published_api": false,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact",
+          "via": "import type { Money }"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/checkout/receipt.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [],
+      "notes": "Type-only import still makes total.ts a dependent."
+    },
+    {
+      "target": "src/cycle/a.ts",
+      "published_api": false,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "src/cycle/b.ts",
+          "confidence": "exact",
+          "via": "import { a } (cycle)"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/cycle/b.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [],
+      "notes": "Import cycle: traversal must terminate; the target itself is never its own dependent."
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "fixture": "monorepo-mixed",
+  "definitions": "docs/DECISIONS.md ADR-0002, ADR-0008",
+  "packages": [
+    {
+      "path": ".",
+      "name": "acme-monorepo",
+      "published": false
+    },
+    {
+      "path": "packages/utils",
+      "name": "@acme/utils",
+      "published": true
+    },
+    {
+      "path": "packages/ui",
+      "name": "@acme/ui",
+      "published": true
+    },
+    {
+      "path": "apps/web",
+      "name": "web",
+      "published": false
+    },
+    {
+      "path": "services/billing",
+      "name": "acme-billing",
+      "published": true
+    }
+  ],
+  "externals": [
+    {
+      "from": "apps/web/src/main.ts",
+      "specifier": "react",
+      "subkind": "third_party"
+    },
+    {
+      "from": "apps/web/test/checkout.test.ts",
+      "specifier": "vitest",
+      "subkind": "third_party"
+    }
+  ],
+  "protected_path_candidates": [
+    "migrations/0001_init.sql",
+    ".env.example",
+    "packages/ui/src/generated/icons.ts"
+  ],
+  "targets": [
+    {
+      "target": "packages/utils/src/format.ts",
+      "published_api": true,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "packages/ui/src/price-tag.ts",
+          "confidence": "exact",
+          "via": "calls formatCurrency resolved through @acme/utils entry"
+        },
+        {
+          "file": "packages/utils/src/index.ts",
+          "confidence": "exact",
+          "via": "export { formatCurrency }"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "apps/web/src/checkout.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "apps/web/src/main.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "packages/ui/src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "packages/ui/src/price-tag.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "packages/utils/src/index.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "apps/web/src/checkout.ts"
+      ],
+      "notes": "Cross-package chain: @acme/utils -> @acme/ui -> web. Dependents span 3 packages (utils, ui, web)."
+    },
+    {
+      "target": "packages/utils/src/strings.ts#internalPad",
+      "published_api": false,
+      "target_covered": false,
+      "direct": [],
+      "transitive": [],
+      "covered": [],
+      "notes": "Exported from its file but not from the package entry point, and unused: no dependents, not published API."
+    },
+    {
+      "target": "packages/ui/src/internal/theme.ts",
+      "published_api": false,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "packages/ui/src/price-tag.ts",
+          "confidence": "exact",
+          "via": "import { theme }"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "apps/web/src/checkout.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "apps/web/src/main.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "packages/ui/src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "packages/ui/src/price-tag.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "apps/web/src/checkout.ts"
+      ],
+      "notes": "Internal file of a published package: not published API, but has cross-package transitive dependents."
+    },
+    {
+      "target": "services/billing/acme_billing/money.py",
+      "published_api": false,
+      "target_covered": false,
+      "direct": [
+        {
+          "file": "services/billing/acme_billing/invoice.py",
+          "confidence": "exact",
+          "via": "from .money import to_cents"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "services/billing/acme_billing/__init__.py",
+          "confidence": "exact"
+        },
+        {
+          "file": "services/billing/acme_billing/invoice.py",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "services/billing/acme_billing/invoice.py"
+      ],
+      "notes": "Python project inside a JS monorepo; to_cents is not exported from the top-level __init__."
+    },
+    {
+      "target": "apps/web/src/checkout.ts",
+      "published_api": false,
+      "target_covered": true,
+      "direct": [
+        {
+          "file": "apps/web/src/main.ts",
+          "confidence": "exact",
+          "via": "import { checkout }"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "apps/web/src/main.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [],
+      "notes": "Private package: never published API."
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "nodenext",
+    "paths": { "@/lib/*": ["./src/lib/*"] }
+  },
+  "include": ["src", "test"]
+}

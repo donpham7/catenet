@@ -1,0 +1,8 @@
+{
+  "name": "ts-basic-lib",
+  "version": "1.0.0",
+  "description": "Catenet fixture: single published TS package with seeded hidden dependencies.",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "lodash": "^4.17.21" },
+  "devDependencies": { "vitest": "^5.0.0" }
+}

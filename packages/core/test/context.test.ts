@@ -36,14 +36,28 @@ describe("editContext", () => {
     expect(text).toContain("8 files depend on it directly, 11 in total");
     expect(text).toContain("published API");
     expect(text).toContain("2 of 11 dependents are reached by a test");
-    expect(text).toContain("mcp__catenet__impact_of");
+    expect(text).toContain("Catenet's impact_of tool");
     expect(text?.length).toBeLessThanOrEqual(800);
     expect(text?.includes("\n")).toBe(false);
     expect(text?.includes("\u001b")).toBe(false);
   });
 
   it("quotes repo paths, so they read as data", () => {
-    expect(editContext(graph, "src/lib/format.ts")).toMatch(/Direct dependents include: "src\/[^"]+", "/);
+    expect(editContext(graph, "src/lib/format.ts")).toMatch(/Direct dependents[^:]*: "src\/[^"]+", "/);
+  });
+
+  it("names up to 8 direct dependents, untested ones first", () => {
+    const text = editContext(graph, "src/lib/format.ts") ?? "";
+    const list = text.slice(text.indexOf("Direct dependents"));
+    const named = [...list.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect(named).toHaveLength(8); // all 8 direct dependents of format.ts fit
+    expect(list).toMatch(/\((\d+) not reached by any test, listed first\)/);
+    const untested = Number(/\((\d+) not reached/.exec(list)?.[1]);
+    const covered = ["src/lib/index.ts", "src/ui/widget.ts"]; // the answer key's covered direct dependents
+    expect(untested).toBe(6);
+    // Every tested dependent comes after every untested one.
+    const firstTested = named.findIndex((f) => covered.includes(f as string));
+    expect(firstTested).toBeGreaterThanOrEqual(untested);
   });
 
   it("says nothing for files without dependents or outside the graph", () => {
@@ -57,12 +71,39 @@ describe("editContext", () => {
   });
 });
 
+describe("long paths", () => {
+  it("fits whole quoted paths into the cap and keeps the count of the rest", async () => {
+    const { mkdirSync } = await import("node:fs");
+    const deep = join(tmp, "deep");
+    const dir = `packages/${"feature-".repeat(6)}area/src/modules`;
+    mkdirSync(join(deep, dir), { recursive: true });
+    writeFileSync(join(deep, dir, "shared.ts"), "export const shared = 1;\n");
+    for (let i = 0; i < 12; i++)
+      writeFileSync(
+        join(deep, dir, `consumer-module-number-${i}.ts`),
+        'import { shared } from "./shared";\nexport const x = shared;\n',
+      );
+    await indexRepo({ root: deep, dbPath: join(tmp, "deep.db"), full: true });
+    const g = openGraph(join(tmp, "deep.db"));
+    try {
+      const text = editContext(g, `${dir}/shared.ts`) ?? "";
+      expect(text.length).toBeLessThanOrEqual(800);
+      expect((text.match(/"/g) ?? []).length % 2).toBe(0); // no quote left open
+      expect(text).toMatch(/\(\+\d+ more\)\.$/);
+      expect(text.endsWith("…")).toBe(false);
+    } finally {
+      g.close();
+    }
+  });
+});
+
 describe("sessionContext", () => {
   it("gives a compact repo map and points at the tools", () => {
     const text = sessionContext(graph);
     expect(text).toContain("ts-basic-lib");
     expect(text).toContain("src/lib/format.ts");
-    expect(text).toContain("mcp__catenet__get_dependents");
+    expect(text).toContain("get_dependents");
+    expect(text).not.toContain("mcp__");
     expect(text?.length).toBeLessThanOrEqual(1500);
   });
 });

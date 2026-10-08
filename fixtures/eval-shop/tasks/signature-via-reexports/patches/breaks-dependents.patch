@@ -1,0 +1,77 @@
+diff --git a/src/checkout/receipt.ts b/src/checkout/receipt.ts
+index 85a6c65..13abcfe 100644
+--- a/src/checkout/receipt.ts
++++ b/src/checkout/receipt.ts
+@@ -2,5 +2,5 @@ import type { CartItem } from "../cart/types.ts";
+ import { price } from "../money/index.ts";
+ 
+ export function receiptLines(items: CartItem[]): string[] {
+-  return items.map((item) => `${item.quantity} x ${item.sku} @ ${price(item.price)}`);
++  return items.map((item) => `${item.quantity} x ${item.sku} @ ${price(item.price, { currency: "USD" })}`);
+ }
+diff --git a/src/checkout/total.ts b/src/checkout/total.ts
+index d701a07..f5caef2 100644
+--- a/src/checkout/total.ts
++++ b/src/checkout/total.ts
+@@ -6,5 +6,5 @@ export function cartSubtotal(cartId: string): number {
+ }
+ 
+ export function checkoutTotal(cartId: string, taxRate = 0): string {
+-  return formatPrice(applyTax(cartSubtotal(cartId), taxRate));
++  return formatPrice(applyTax(cartSubtotal(cartId), taxRate), { currency: "USD" });
+ }
+diff --git a/src/money/format.ts b/src/money/format.ts
+index 0123cf8..cfea110 100644
+--- a/src/money/format.ts
++++ b/src/money/format.ts
+@@ -1,5 +1,13 @@
+-export function formatPrice(amount: number): string {
+-  return `$${roundCents(amount).toFixed(2)}`;
++const SYMBOLS: Record<string, string> = { USD: "$", EUR: "€" };
++
++export interface PriceOptions {
++  currency: string;
++}
++
++export function formatPrice(amount: number, options: PriceOptions): string {
++  const symbol = options?.currency ? SYMBOLS[options.currency] : undefined;
++  if (!symbol) throw new Error(`unsupported currency: ${String(options?.currency)}`);
++  return `${symbol}${roundCents(amount).toFixed(2)}`;
+ }
+ 
+ export function roundCents(amount: number): number {
+diff --git a/src/reports/daily.ts b/src/reports/daily.ts
+index ee9ed4a..80544bb 100644
+--- a/src/reports/daily.ts
++++ b/src/reports/daily.ts
+@@ -1,5 +1,5 @@
+ export async function dailySummary(totals: number[]): Promise<string> {
+   const { formatPrice } = await import("../money/format.ts");
+   const sum = totals.reduce((a, b) => a + b, 0);
+-  return `${totals.length} orders, ${formatPrice(sum)}`;
++  return `${totals.length} orders, ${formatPrice(sum, { currency: "USD" })}`;
+ }
+diff --git a/src/storefront/badge.ts b/src/storefront/badge.ts
+index 47f437c..d1d552b 100644
+--- a/src/storefront/badge.ts
++++ b/src/storefront/badge.ts
+@@ -1,5 +1,5 @@
+ import { displayPrice } from "../pricing/index.ts";
+ 
+ export function priceBadge(amount: number): string {
+-  return `[${displayPrice(amount)}]`;
++  return `[${displayPrice(amount, { currency: "USD" })}]`;
+ }
+diff --git a/test/money.test.ts b/test/money.test.ts
+index a66458c..20ef7d8 100644
+--- a/test/money.test.ts
++++ b/test/money.test.ts
+@@ -3,7 +3,7 @@ import { test } from "node:test";
+ import { applyTax, formatPrice } from "../src/money/index.ts";
+ 
+ test("formats prices", () => {
+-  assert.equal(formatPrice(12.5), "$12.50");
++  assert.equal(formatPrice(12.5, { currency: "USD" }), "$12.50");
+ });
+ 
+ test("applies tax", () => {

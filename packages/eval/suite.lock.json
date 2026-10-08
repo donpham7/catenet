@@ -1,0 +1,9 @@
+{
+  "suite": "eval-shop",
+  "hash": "f9b2fe4aa2d8880c21670b4e556b6ba1a833a771e69598fa09b4b42c905722eb",
+  "trials": 20,
+  "model": "claude-sonnet-5-5",
+  "maxTurns": 40,
+  "seed": 2026,
+  "registeredAt": "2026-10-07T23:24:41.777Z"
+}

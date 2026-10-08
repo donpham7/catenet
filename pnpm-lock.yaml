@@ -199,6 +199,9 @@ importers:
       '@catenet/daemon':
         specifier: workspace:*
         version: link:../daemon
+      '@catenet/eval':
+        specifier: workspace:*
+        version: link:../eval
       '@catenet/mcp':
         specifier: workspace:*
         version: link:../mcp
@@ -226,6 +229,12 @@ importers:
       chokidar:
         specifier: 5.0.0
         version: 5.0.0
+
+  packages/eval:
+    dependencies:
+      '@catenet/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/mcp:
     dependencies:

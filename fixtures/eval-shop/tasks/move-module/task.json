@@ -1,0 +1,39 @@
+{
+  "id": "move-module",
+  "kind": "edit",
+  "category": "b",
+  "prompt": "prompt.md",
+  "acceptance": "holdout/acceptance.test.ts",
+  "dependents": [
+    {
+      "file": "src/orders/history.ts",
+      "edge": "exact",
+      "test": "holdout/history.test.ts"
+    },
+    {
+      "file": "src/reports/weekly.ts",
+      "edge": "exact",
+      "test": "holdout/weekly.test.ts"
+    },
+    {
+      "file": "src/shipping/eta.ts",
+      "edge": "exact",
+      "test": "holdout/eta.test.ts"
+    },
+    {
+      "file": "src/legacy/schedule.cjs",
+      "edge": "exact",
+      "test": "holdout/schedule.test.ts"
+    },
+    {
+      "file": "src/jobs/cleanup.cjs",
+      "edge": "exact",
+      "test": "holdout/cleanup.test.ts"
+    },
+    {
+      "file": "src/index.ts",
+      "edge": "exact",
+      "test": "holdout/entry.test.ts"
+    }
+  ]
+}

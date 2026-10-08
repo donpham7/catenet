@@ -4,14 +4,20 @@ Small checked-in repositories with **seeded hidden dependencies** and a hand-wri
 dependents. They are the ground truth for indexer tests (M1), the gate (M5) and the benchmark harness (M4).
 
 ```
-fixtures/<name>/repo/             the repository Catenet indexes (never executed, never built)
+fixtures/<name>/repo/             the repository Catenet indexes (never executed or built in place)
 fixtures/<name>/answer-key.json   expected results; lives outside repo/ so it is never indexed
+fixtures/eval-shop/tasks/<id>/    M4 eval tasks: task.json, prompt.md, held-out tests, patches (outside repo/)
 ```
+
+The M1 fixtures are never executed. `eval-shop` is the M4 eval repository: it is runnable (`npm test` runs on Node 24
+with no installs, `npm run typecheck` uses the workspace's `tsc`), but only ever in temporary copies made by
+`packages/eval`. Nothing in `eval-shop/repo/` names what was seeded, because an agent reads it.
 
 | Fixture | What it seeds |
 |---|---|
 | `ts-basic` | One published TS package: barrel `export *`, renamed re-export, tsconfig path alias, default / namespace / type-only imports, literal and template dynamic `import()`, cross-file inheritance, an import cycle, a side-effect import, CommonJS `require` and exports (`exports.x =`, `module.exports.x =`, `module.exports = function`/`{ ... }`, a required module called as its default export), test files importing through the barrel, a third-party import. |
 | `py-basic` | One published Python project: package `__init__` re-exports, relative (`.`/`..`) and absolute imports, `import x.y as m` attribute access, `from x import *` with `__all__`, import inside `try/except`, `importlib.import_module` with a literal (heuristic) and an f-string (unresolved), inheritance, `tests/test_*.py`. |
+| `eval-shop` | One published, runnable TS package (~360 files, ~300 of them noise modules and look-alike names) for the M4 eval: an `export *` barrel with two levels of renamed re-exports (`price`, then `displayPrice`), CommonJS consumers that `require()` TypeScript (invisible to the type checker), literal dynamic `import()`s, truthiness callers of a boolean, a dependent reached through the package entry, and a template `import()` that no static graph can follow (the `none`-edge control). Each task in `tasks/` lists the dependents a change must keep working, with held-out tests, a correct patch and a patch that misses dependents. |
 | `monorepo-mixed` | pnpm workspace with two published packages (`@acme/utils`, `@acme/ui`), a private app (`web`) importing them by workspace name, a Python service with `pyproject.toml`, an unused export, an internal file, and protected-path candidates (`migrations/`, `.env.example`, `generated/`). |
 
 ## Counting rules (ADR-0002, ADR-0008)

@@ -1,0 +1,66 @@
+diff --git a/src/cart/store.ts b/src/cart/store.ts
+index 3e9f9db..b790249 100644
+--- a/src/cart/store.ts
++++ b/src/cart/store.ts
+@@ -2,7 +2,7 @@ import type { Cart, CartItem } from "./types.ts";
+ 
+ const carts = new Map<string, Cart>();
+ 
+-export function getCart(id: string): Cart {
++export function loadCart(id: string): Cart {
+   let cart = carts.get(id);
+   if (!cart) {
+     cart = { id, items: [] };
+@@ -12,7 +12,7 @@ export function getCart(id: string): Cart {
+ }
+ 
+ export function addItem(id: string, item: CartItem): Cart {
+-  const cart = getCart(id);
++  const cart = loadCart(id);
+   cart.items.push(item);
+   return cart;
+ }
+diff --git a/src/checkout/total.ts b/src/checkout/total.ts
+index d701a07..f943153 100644
+--- a/src/checkout/total.ts
++++ b/src/checkout/total.ts
+@@ -1,8 +1,8 @@
+-import { getCart } from "../cart/store.ts";
++import { loadCart } from "../cart/store.ts";
+ import { applyTax, formatPrice } from "../money/index.ts";
+ 
+ export function cartSubtotal(cartId: string): number {
+-  return getCart(cartId).items.reduce((sum, item) => sum + item.price * item.quantity, 0);
++  return loadCart(cartId).items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+ }
+ 
+ export function checkoutTotal(cartId: string, taxRate = 0): string {
+diff --git a/src/index.ts b/src/index.ts
+index 66cf150..f868ddb 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,5 +1,7 @@
+ export * from "./money/index.ts";
+-export { addItem, clearCarts, getCart } from "./cart/store.ts";
++export { addItem, clearCarts, loadCart } from "./cart/store.ts";
++/** @deprecated Use `loadCart`. */
++export { loadCart as getCart } from "./cart/store.ts";
+ export type { Cart, CartItem } from "./cart/types.ts";
+ export { checkoutTotal } from "./checkout/total.ts";
+ export { formatDate, parseDate } from "./utils/date.ts";
+diff --git a/test/cart.test.ts b/test/cart.test.ts
+index 9e3216b..bd3f69a 100644
+--- a/test/cart.test.ts
++++ b/test/cart.test.ts
+@@ -1,9 +1,9 @@
+ import assert from "node:assert/strict";
+ import { test } from "node:test";
+-import { addItem, clearCarts, getCart } from "../src/cart/store.ts";
++import { addItem, clearCarts, loadCart } from "../src/cart/store.ts";
+ 
+ test("adds items to a cart", () => {
+   clearCarts();
+   addItem("c1", { sku: "A", price: 2, quantity: 1 });
+-  assert.equal(getCart("c1").items.length, 1);
++  assert.equal(loadCart("c1").items.length, 1);
+ });

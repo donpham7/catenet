@@ -153,8 +153,9 @@ tool_calls(id, session_id, tool_use_id, ts, tool, target_paths JSON, args_summar
                                                                    -- outcome: succeeded|failed|denied|unknown
 diffs(id, session_id, tool_use_id, ts, path, added, removed, hash_before, hash_after, partial)
 compactions(id, session_id, ts, phase, trigger)                    -- phase pre|post, trigger manual|auto
-hook_calls(id, session_id, ts, event, sync, ms)                    -- ms: hook process start to daemon answer;
-                                                                   -- sync: the agent waited for it
+hook_calls(id, session_id, ts, event, sync, ms, context_chars)     -- ms: hook process start to daemon answer;
+                                                                   -- sync: the agent waited for it; context_chars:
+                                                                   -- length of context added (0 = none; schema v3)
 decisions(id, session_id, tool_use_id NULL, ts, verdict, rule_ids JSON, evidence JSON, latency_ms)
                                                                    -- M5; tool_use_id NULL for post-edit violation decisions
 errors(id, ts, component, message)                                 -- hook/daemon failures (fail-open log)
@@ -178,8 +179,12 @@ This section is the source of truth for the event schema; `docs/diagrams/04-stor
   `key: value` and JSON assignments whose key names a secret (password, passwd, pwd, pass, secret, token, api key,
   access key, private key, credential), quoted values included. Storing contents or full prompts would need an
   explicit opt-in setting (not built).
-- **Schema version:** `meta.schema_version` is checked on open; a file from another version is renamed to
-  `events.db.v<N>.bak` and a fresh one is created (the log is local and pre-release).
+- **Schema version:** `meta.schema_version` is checked on open. The daemon, the only writer, renames a file from
+  another version to `events.db.v<N>.bak` (never overwriting an earlier backup) and starts a fresh one; readers such
+  as `catenet report` leave it alone and say so (the log is local and pre-release).
+- **Paths through symlinks:** tool-call paths are made repository-relative after resolving symlinks in their
+  directories (agents may report `/private/var/...` for a repo at `/var/...`), but not in the file name, so a symlinked
+  file inside the repo keeps its own name, as the indexer does. Reading a file for diffs still checks its real path.
 - **Retention:** 30 days (`retentionDays` in `.catenet/config.json`), pruned right after the daemon answers its first
   hook.
 - **`catenet report [--session last|<id>] [--json]`** reads it: session facts (local times), prompts, tool calls by
@@ -352,7 +357,8 @@ catenet mcp [--no-daemon]    # MCP server over stdio; root: the opted-in repo co
 catenet doctor [--json]      # node (own and on PATH), graph versions, freshness, daemon, MCP handshake, recent hook
                              # failures; exit 1 if unhealthy  (M2, M3)
 catenet ui                   # open the visualization
-catenet eval ...             # run the benchmark harness
+catenet eval run|report|lock # the benchmark harness (packages/eval, M4): pre-registered tasks with and without
+                             # Catenet, paired effects with CIs; --driver patch is a free self-test, --plan prices a run
 ```
 
 ### 2.12 Daemon (`packages/daemon`), M2

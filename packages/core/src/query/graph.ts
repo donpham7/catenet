@@ -46,6 +46,8 @@ export interface Impact {
 export interface ImpactSummary {
   target: string;
   direct: string[];
+  /** The direct dependents no test reaches (static): the likeliest to break unnoticed. */
+  untestedDirect: string[];
   transitiveCount: number;
   packageCount: number;
   publishedApi: boolean;
@@ -259,14 +261,16 @@ export class Graph {
       .map((r) => r.path)
       .sort((a, b) => a.localeCompare(b));
     const stats = this.store.closureStats(direct, target.path);
+    const tested = this.store.testedAmong([...direct, target.path]);
     return {
       target: target.id,
       direct,
+      untestedDirect: direct.filter((d) => !tested.has(d)),
       transitiveCount: stats.transitive,
       packageCount: stats.packages,
       publishedApi: this.isPublished(target),
       coveredDependents: stats.covered,
-      targetCovered: this.isTargetCovered(target),
+      targetCovered: target.symbol === null ? tested.has(target.path) : this.isTargetCovered(target),
     };
   }
 

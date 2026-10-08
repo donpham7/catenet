@@ -287,6 +287,7 @@ erDiagram
     string event
     int sync "1 = the agent waited for it"
     int ms "hook process start to daemon answer"
+    int context_chars "length of context added (0 = none)"
   }
   ERRORS {
     int id PK

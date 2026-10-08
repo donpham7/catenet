@@ -1,0 +1,16 @@
+{
+  "id": "q-dependents",
+  "kind": "question",
+  "category": "e",
+  "prompt": "prompt.md",
+  "answer": {
+    "files": [
+      "src/checkout/receipt.ts",
+      "src/checkout/total.ts",
+      "src/legacy/invoice.cjs",
+      "src/reports/daily.ts",
+      "src/reports/export.ts",
+      "src/storefront/badge.ts"
+    ]
+  }
+}

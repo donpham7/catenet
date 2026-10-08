@@ -116,6 +116,7 @@ function expectAgreement(g: Graph, target: string, label: string): void {
   expect(g.impactSummary(target), `${label} ${target}`).toEqual({
     target: full.target.id,
     direct: full.direct.map((d) => d.file),
+    untestedDirect: full.direct.map((d) => d.file).filter((f) => !full.tests.covered.includes(f)),
     transitiveCount: full.transitive.length,
     packageCount: full.packages.length,
     publishedApi: full.publishedApi,

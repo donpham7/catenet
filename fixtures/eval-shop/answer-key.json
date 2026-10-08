@@ -1,0 +1,570 @@
+{
+  "fixture": "eval-shop",
+  "definitions": "docs/DECISIONS.md ADR-0002, ADR-0008",
+  "notes": "Runnable eval repository for M4 (packages/eval). Targets are file-level: a dynamic import() records no imported names, so symbol targets would miss src/reports/daily.ts (BACKLOG). src/reports/export.ts reaches money/format.ts only through a template import() and is deliberately not a dependent.",
+  "packages": [
+    {
+      "path": ".",
+      "name": "eval-shop",
+      "published": true
+    }
+  ],
+  "externals": [
+    {
+      "from": "src/reports/export.ts",
+      "specifier": "../${module}.ts",
+      "subkind": "unresolved"
+    },
+    {
+      "from": "test/analytics.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/analytics.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/audit.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/audit.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/banner.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/banner.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/cart.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/cart.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/catalog.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/catalog.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/checkout.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/checkout.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/date.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/date.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/email.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/email.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/inventory.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/inventory.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/loyalty.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/loyalty.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/media.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/media.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/money.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/money.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/notifications.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/notifications.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/package.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/package.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/plans.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/plans.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/promotions.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/promotions.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/rates.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/rates.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/returns.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/returns.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/reviews.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/reviews.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/search.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/search.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/support.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/support.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/users.test.ts",
+      "specifier": "node:assert/strict",
+      "subkind": "builtin"
+    },
+    {
+      "from": "test/users.test.ts",
+      "specifier": "node:test",
+      "subkind": "builtin"
+    }
+  ],
+  "protected_path_candidates": [],
+  "targets": [
+    {
+      "target": "src/money/format.ts",
+      "published_api": true,
+      "target_covered": true,
+      "direct": [
+        {
+          "file": "src/money/index.ts",
+          "confidence": "exact",
+          "via": "export * and a renamed re-export (price)"
+        },
+        {
+          "file": "src/money/tax.ts",
+          "confidence": "exact",
+          "via": "imports roundCents"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact",
+          "via": "export * from ./money/index.ts re-exports it"
+        },
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact",
+          "via": "calls formatPrice imported through the money barrel"
+        },
+        {
+          "file": "src/checkout/receipt.ts",
+          "confidence": "exact",
+          "via": "calls price, the renamed re-export of formatPrice"
+        },
+        {
+          "file": "src/reports/daily.ts",
+          "confidence": "exact",
+          "via": "literal dynamic import()"
+        },
+        {
+          "file": "src/pricing/index.ts",
+          "confidence": "exact",
+          "via": "re-exports price (itself the renamed formatPrice) as displayPrice"
+        },
+        {
+          "file": "src/storefront/badge.ts",
+          "confidence": "exact",
+          "via": "calls displayPrice, two renamed re-exports away"
+        },
+        {
+          "file": "src/legacy/invoice.cjs",
+          "confidence": "exact",
+          "via": "require() of the pricing barrel, destructuring displayPrice"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/money/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/money/tax.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/checkout/receipt.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/reports/daily.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/pricing/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/storefront/badge.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/legacy/invoice.cjs",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/admin/dashboard.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "src/checkout/total.ts",
+        "src/index.ts",
+        "src/money/index.ts",
+        "src/money/tax.ts"
+      ],
+      "notes": "Two levels of renamed re-exports (formatPrice -> price -> displayPrice), a CommonJS consumer of the second, a literal dynamic import; dashboard depends on the package entry."
+    },
+    {
+      "target": "src/validation/email.ts",
+      "published_api": true,
+      "target_covered": true,
+      "direct": [
+        {
+          "file": "src/validation/index.ts",
+          "confidence": "exact",
+          "via": "export *"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact",
+          "via": "re-exports isValidEmail from the validation barrel"
+        },
+        {
+          "file": "src/signup/form.ts",
+          "confidence": "exact",
+          "via": "calls isValidEmail through the validation barrel"
+        },
+        {
+          "file": "src/newsletter/subscribe.ts",
+          "confidence": "exact",
+          "via": "imports isValidEmail"
+        },
+        {
+          "file": "src/legacy/mailer.cjs",
+          "confidence": "exact",
+          "via": "require() destructuring isValidEmail"
+        },
+        {
+          "file": "src/accounts/invite.ts",
+          "confidence": "exact",
+          "via": "imports isValidEmail as emailOk through the validation barrel"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/validation/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/signup/form.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/newsletter/subscribe.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/legacy/mailer.cjs",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/accounts/invite.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/admin/dashboard.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "src/index.ts"
+      ],
+      "notes": "Callers test the result for truthiness, so a boolean-to-object change still type-checks."
+    },
+    {
+      "target": "src/cart/store.ts#getCart",
+      "published_api": true,
+      "target_covered": true,
+      "direct": [
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact",
+          "via": "imports getCart"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact",
+          "via": "re-exports getCart"
+        },
+        {
+          "file": "src/admin/dashboard.ts",
+          "confidence": "exact",
+          "via": "imports getCart from the package entry"
+        },
+        {
+          "file": "src/legacy/cart-sync.cjs",
+          "confidence": "exact",
+          "via": "store.getCart on a required module"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/checkout/total.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/admin/dashboard.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/legacy/cart-sync.cjs",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "src/checkout/total.ts",
+        "src/index.ts"
+      ],
+      "notes": "Published API used through the entry and through a CommonJS member access."
+    },
+    {
+      "target": "src/utils/date.ts",
+      "published_api": true,
+      "target_covered": true,
+      "direct": [
+        {
+          "file": "src/index.ts",
+          "confidence": "exact",
+          "via": "re-exports formatDate and parseDate"
+        },
+        {
+          "file": "src/orders/history.ts",
+          "confidence": "exact",
+          "via": "imports formatDate"
+        },
+        {
+          "file": "src/reports/weekly.ts",
+          "confidence": "exact",
+          "via": "imports formatDate and addDays"
+        },
+        {
+          "file": "src/shipping/eta.ts",
+          "confidence": "exact",
+          "via": "literal dynamic import()"
+        },
+        {
+          "file": "src/legacy/schedule.cjs",
+          "confidence": "exact",
+          "via": "require() destructuring formatDate and parseDate"
+        },
+        {
+          "file": "src/jobs/cleanup.cjs",
+          "confidence": "exact",
+          "via": "require() of the module, member access"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/orders/history.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/reports/weekly.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/shipping/eta.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/legacy/schedule.cjs",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/jobs/cleanup.cjs",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/admin/dashboard.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "src/index.ts"
+      ],
+      "notes": "Moving the module breaks a CommonJS require that the type checker never sees."
+    },
+    {
+      "target": "src/checkout/total.ts",
+      "published_api": true,
+      "target_covered": true,
+      "direct": [
+        {
+          "file": "src/index.ts",
+          "confidence": "exact",
+          "via": "re-exports checkoutTotal"
+        }
+      ],
+      "transitive": [
+        {
+          "file": "src/index.ts",
+          "confidence": "exact"
+        },
+        {
+          "file": "src/admin/dashboard.ts",
+          "confidence": "exact"
+        }
+      ],
+      "covered": [
+        "src/index.ts"
+      ],
+      "notes": "Ground truth for the q-tests-for task: test/checkout.test.ts imports it, test/package.test.ts imports the entry."
+    },
+    {
+      "target": "src/admin/banner.ts",
+      "published_api": false,
+      "target_covered": true,
+      "direct": [],
+      "transitive": [],
+      "covered": [],
+      "notes": "A leaf: nothing depends on it (leaf-control task)."
+    }
+  ]
+}

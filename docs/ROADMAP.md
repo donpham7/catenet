@@ -86,6 +86,38 @@ agent (fault-injection tests: kill daemon, slow daemon, malformed payload); warm
 Claude Code (S4 measured transport only).
 
 ## M4. Evaluation harness (v0). Do this BEFORE the gate
+**Status:** done 2026-10-08, awaiting owner review. `packages/eval` + `catenet eval run|report|lock`, the runnable
+`fixtures/eval-shop` suite (7 tasks), ADR-0016, pre-registration (`packages/eval/PREREGISTRATION.md`, `suite.lock.json`).
+First pre-registered run: `packages/eval/results/20261007-232450-claude-code/` (280 Claude Code sessions on
+claude-sonnet-5-5, 278 valid; $27, about $35 with the pilots, of the $50 budget). Deviations, listed in the report:
+Claude Code updated itself from 2.1.287 to 2.1.293 partway through, the pre-registration was not committed, and the
+run was interrupted and resumed on the same schedule.
+- **H1 supported:** edit tasks passed without breaking a dependent Catenet can see in 86% of sessions without Catenet
+  and 100% with it, effect +0.14 [+0.08, +0.20] (97.5% CI). The whole effect comes from one task
+  (`signature-via-reexports`: 9/20 vs 20/20). The other three edit tasks passed in every session in both conditions.
+  Every failing baseline session left type errors that `npm run typecheck` would have shown, so this shows Catenet
+  getting the agent to fix callers the type checker would flag, not catching what it can't.
+- **H2 supported:** question tasks used 34% fewer tokens with Catenet [−41%, −25%] (97.5% CI), recall unchanged
+  (−0.01 [−0.05, +0.02]); −48% on `q-tests-for`, where the agent used Catenet's tools, and −15% on `q-dependents`,
+  where it didn't.
+- **Cost of Catenet while editing:** +11.5% tokens [+3.9%, +19.5%] (95% CI, descriptive). Cost per session was the
+  same or slightly lower (cache reads are cheap).
+- **Control:** no measurable difference for the dependent no static graph can see (16/20 vs 12/20 sessions,
+  −0.20 [−0.45, +0.10]).
+- **Code review (2026-10-08):** 24 findings, none changing the recorded numbers. Fixed: the injected note could be cut
+  mid-quote with long paths; a regression for symlinked files inside a repo; `events.db` backups could be
+  overwritten; and harness robustness. The harness changes are: `--out` can't overwrite results; plan-limit and auth
+  errors count as infrastructure, not agent failures; the whole process group is killed on timeout; resume checks
+  provenance and re-runs errors; daemons are stopped on harness errors; the binary is pinned and auto-update is off;
+  account connectors are off; the grader uses the checkout's `tsc`; and "Supported" is directional.
+- **Hook latency in session:** median per-session p95 59 ms, 90th percentile 90 ms; 11 of 138 Catenet sessions had a
+  p95 above 100 ms (worst 1,154 ms); 0 hook failures.
+- **Found and fixed by the pilots:** edit context never fired for paths through a symlink (macOS `/var`), and the
+  injected note named MCP tools with the wrong prefix for a plugin install. The note now lists up to 8 dependents,
+  untested first (owner decision).
+- **Limits** (packages/eval/README.md): one small synthetic repository written by Catenet's authors, one model, three
+  of four edit tasks at ceiling, and a suite hardened after the first pilot (disclosed in the pre-registration).
+
 - `packages/eval`: runs scripted tasks on fixture repos with and without Catenet (headless agent runs where feasible).
 - Metrics: broken-dependent rate (tests/typecheck failing after the edit), tokens and tool calls, gate false-positive rate (labeled), latency.
 - Design for rigor: pre-registered task list, multiple seeds/trials, paired comparisons, report effect sizes **with confidence intervals**,

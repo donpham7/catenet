@@ -1,0 +1,458 @@
+{
+  "report_version": 1,
+  "meta": {
+    "runId": "20261007-232450-claude-code",
+    "startedAt": "2026-10-07T23:24:50.000Z",
+    "resumedAt": [
+      "2026-10-08T04:48:30.598Z"
+    ],
+    "finishedAt": "2026-10-08T06:04:08.804Z",
+    "driver": "claude-code",
+    "agentVersion": "2.1.287 (Claude Code)",
+    "model": "claude-sonnet-5-5",
+    "maxTurns": 40,
+    "catenetCommit": "0d8ca56c493c+dirty",
+    "suite": {
+      "name": "eval-shop",
+      "hash": "f9b2fe4aa2d8880c21670b4e556b6ba1a833a771e69598fa09b4b42c905722eb",
+      "taskIds": [
+        "boolean-to-result",
+        "leaf-control",
+        "move-module",
+        "q-dependents",
+        "q-tests-for",
+        "rename-published-api",
+        "signature-via-reexports"
+      ],
+      "allTasks": true
+    },
+    "lock": {
+      "hash": "f9b2fe4aa2d8880c21670b4e556b6ba1a833a771e69598fa09b4b42c905722eb",
+      "trials": 20,
+      "model": "claude-sonnet-5-5",
+      "maxTurns": 40,
+      "seed": 2026
+    },
+    "seed": 2026,
+    "trials": 20,
+    "concurrency": 1,
+    "maxCostUsd": 41,
+    "stoppedEarly": false,
+    "node": "24.21.0",
+    "platform": "darwin-arm64",
+    "deviations": [
+      "Claude Code updated itself from 2.1.287 to 2.1.293 at 2026-10-08T04:53:05Z, 4.5 minutes after the resume; about 60% of the sessions (most after the resume) ran on 2.1.293. Sessions did not record their version then. A split before and after points the same way (M4 review).",
+      "The pre-registration (PREREGISTRATION.md, suite.lock.json) was written before the run but not committed, so git does not prove its timing; the code under test is recorded as 0d8ca56+dirty.",
+      "The run was interrupted after 96 of 280 sessions and resumed on the same schedule, lock and plugin bundle.",
+      "Recorded after the run (2026-10-08) during the M4 review; the data in raw.jsonl is unchanged."
+    ]
+  },
+  "exploratory": false,
+  "exploratoryReasons": [],
+  "counts": {
+    "runs": 280,
+    "ok": 278,
+    "invalid": 2,
+    "error": 0,
+    "missingTokens": 0
+  },
+  "primary": {
+    "supported": {
+      "edit": true,
+      "question": true
+    },
+    "edit": {
+      "metric": "passed_without_breakage",
+      "baseline": {
+        "runs": 80,
+        "mean": 0.8625
+      },
+      "catenet": {
+        "runs": 78,
+        "mean": 1
+      },
+      "effect": {
+        "estimate": 0.1375,
+        "lo": 0.07500000000000001,
+        "hi": 0.2,
+        "level": 0.975
+      }
+    },
+    "question": {
+      "metric": "tokens_total",
+      "baseline": {
+        "runs": 40,
+        "mean": 210017.95
+      },
+      "catenet": {
+        "runs": 40,
+        "mean": 131131.625
+      },
+      "effect": {
+        "estimate": -0.41022911503506315,
+        "lo": -0.5198083919484429,
+        "hi": -0.2915832417882117,
+        "level": 0.975
+      },
+      "percentChange": {
+        "estimate": -33.65017846966122,
+        "lo": -40.536552619179304,
+        "hi": -25.29201772458154,
+        "level": 0.975
+      },
+      "recallGuard": {
+        "estimate": -0.012500000000000011,
+        "lo": -0.045833333333333226,
+        "hi": 0.020833333333333204,
+        "level": 0.975
+      },
+      "guardOk": true
+    }
+  },
+  "secondary": {
+    "editTokens": {
+      "baseline": {
+        "runs": 80,
+        "mean": 138196.875
+      },
+      "catenet": {
+        "runs": 78,
+        "mean": 153443.12820512822
+      },
+      "effect": {
+        "estimate": 0.10898335525235242,
+        "lo": 0.03812629909067889,
+        "hi": 0.17818421430905834,
+        "level": 0.95
+      },
+      "percentChange": {
+        "estimate": 11.514378890001598,
+        "lo": 3.8862431973658795,
+        "hi": 19.50454454301882,
+        "level": 0.95
+      }
+    },
+    "questionTokensByTask": {
+      "q-dependents": {
+        "estimate": -14.763395414570313,
+        "lo": -23.917346624616144,
+        "hi": -4.698444843250982,
+        "level": 0.95
+      },
+      "q-tests-for": {
+        "estimate": -48.35201568012324,
+        "lo": -55.80790547456136,
+        "hi": -38.60507168943072,
+        "level": 0.95
+      }
+    },
+    "dependentsBroken": {
+      "exact": {
+        "baseline": {
+          "runs": 80,
+          "mean": 0.375
+        },
+        "catenet": {
+          "runs": 78,
+          "mean": 0
+        },
+        "effect": {
+          "estimate": -0.375,
+          "lo": -0.525,
+          "hi": -0.225,
+          "level": 0.95
+        }
+      },
+      "heuristic": "no data",
+      "none": {
+        "baseline": {
+          "runs": 20,
+          "mean": 0.8
+        },
+        "catenet": {
+          "runs": 20,
+          "mean": 0.6
+        },
+        "effect": {
+          "estimate": -0.20000000000000007,
+          "lo": -0.45000000000000007,
+          "hi": 0.09999999999999998,
+          "level": 0.95
+        }
+      }
+    },
+    "taskPassed": {
+      "baseline": {
+        "runs": 80,
+        "mean": 1
+      },
+      "catenet": {
+        "runs": 78,
+        "mean": 1
+      },
+      "effect": {
+        "estimate": 0,
+        "lo": 0,
+        "hi": 0,
+        "level": 0.95
+      }
+    },
+    "precision": {
+      "baseline": {
+        "runs": 40,
+        "mean": 1
+      },
+      "catenet": {
+        "runs": 40,
+        "mean": 1
+      },
+      "effect": {
+        "estimate": 0,
+        "lo": 0,
+        "hi": 0,
+        "level": 0.95
+      }
+    },
+    "recall": {
+      "baseline": {
+        "runs": 40,
+        "mean": 0.9375000000000002
+      },
+      "catenet": {
+        "runs": 40,
+        "mean": 0.9249999999999998
+      },
+      "effect": {
+        "estimate": -0.012500000000000011,
+        "lo": -0.041666666666666574,
+        "hi": 0.016666666666666607,
+        "level": 0.95
+      }
+    },
+    "costUsd": {
+      "baseline": {
+        "runs": 140,
+        "mean": 0.09855316428571433
+      },
+      "catenet": {
+        "runs": 138,
+        "mean": 0.09459001884057977
+      },
+      "effect": {
+        "estimate": -0.003832048095238099,
+        "lo": -0.007030036765873023,
+        "hi": -0.0007231472380952342,
+        "level": 0.95
+      }
+    },
+    "turns": {
+      "baseline": {
+        "runs": 140,
+        "mean": 13.042857142857143
+      },
+      "catenet": {
+        "runs": 138,
+        "mean": 12.86231884057971
+      },
+      "effect": {
+        "estimate": -0.13809523809523722,
+        "lo": -0.6730158730158727,
+        "hi": 0.3833730158730157,
+        "level": 0.95
+      }
+    },
+    "toolCallsPerRun": {
+      "baseline": {
+        "Bash": 2.414285714285714,
+        "Edit": 3.757142857142857,
+        "Glob": 0.21428571428571427,
+        "Grep": 2.0285714285714285,
+        "Read": 2.592857142857143,
+        "Write": 1.0357142857142858
+      },
+      "catenet": {
+        "Bash": 1.8985507246376812,
+        "Edit": 4.13768115942029,
+        "Glob": 0.036231884057971016,
+        "Grep": 2,
+        "Read": 2.6231884057971016,
+        "ToolSearch": 0.13043478260869565,
+        "Write": 0.782608695652174,
+        "mcp__plugin_catenet_catenet__get_dependents": 0.10144927536231885,
+        "mcp__plugin_catenet_catenet__tests_for": 0.15217391304347827
+      }
+    },
+    "contextInjectedRate": 1,
+    "hookP95Ms": 1154,
+    "gateFalsePositiveRate": "n/a until M5"
+  },
+  "perTask": [
+    {
+      "task": "boolean-to-result",
+      "kind": "edit",
+      "control": false,
+      "baseline": {
+        "passedWithoutBreakage": 1,
+        "taskPassed": 1,
+        "visibleDependentsBroken": 0,
+        "controlsBroken": 0,
+        "tokensTotal": 110613.35,
+        "costUsd": 0.09571144
+      },
+      "catenet": {
+        "passedWithoutBreakage": 1,
+        "taskPassed": 1,
+        "visibleDependentsBroken": 0,
+        "controlsBroken": 0,
+        "tokensTotal": 133227.16666666666,
+        "costUsd": 0.10376683333333332
+      },
+      "runs": {
+        "baseline": 20,
+        "catenet": 18
+      }
+    },
+    {
+      "task": "leaf-control",
+      "kind": "edit",
+      "control": true,
+      "baseline": {
+        "passedWithoutBreakage": 1,
+        "taskPassed": 1,
+        "visibleDependentsBroken": 0,
+        "controlsBroken": 0,
+        "tokensTotal": 55311.2,
+        "costUsd": 0.04221462999999999
+      },
+      "catenet": {
+        "passedWithoutBreakage": 1,
+        "taskPassed": 1,
+        "visibleDependentsBroken": 0,
+        "controlsBroken": 0,
+        "tokensTotal": 56583.6,
+        "costUsd": 0.043392240000000006
+      },
+      "runs": {
+        "baseline": 20,
+        "catenet": 20
+      }
+    },
+    {
+      "task": "move-module",
+      "kind": "edit",
+      "control": false,
+      "baseline": {
+        "passedWithoutBreakage": 1,
+        "taskPassed": 1,
+        "visibleDependentsBroken": 0,
+        "controlsBroken": 0,
+        "tokensTotal": 157088.35,
+        "costUsd": 0.09918771000000001
+      },
+      "catenet": {
+        "passedWithoutBreakage": 1,
+        "taskPassed": 1,
+        "visibleDependentsBroken": 0,
+        "controlsBroken": 0,
+        "tokensTotal": 155430.9,
+        "costUsd": 0.10262381000000001
+      },
+      "runs": {
+        "baseline": 20,
+        "catenet": 20
+      }
+    },
+    {
+      "task": "q-dependents",
+      "kind": "question",
+      "control": false,
+      "baseline": {
+        "precision": 1,
+        "recall": 0.875,
+        "tokensTotal": 134936.1,
+        "costUsd": 0.0877837
+      },
+      "catenet": {
+        "precision": 1,
+        "recall": 0.85,
+        "tokensTotal": 115014.95,
+        "costUsd": 0.07872711
+      },
+      "runs": {
+        "baseline": 20,
+        "catenet": 20
+      }
+    },
+    {
+      "task": "q-tests-for",
+      "kind": "question",
+      "control": false,
+      "baseline": {
+        "precision": 1,
+        "recall": 1,
+        "tokensTotal": 285099.8,
+        "costUsd": 0.15016402
+      },
+      "catenet": {
+        "precision": 1,
+        "recall": 1,
+        "tokensTotal": 147248.3,
+        "costUsd": 0.09096632000000003
+      },
+      "runs": {
+        "baseline": 20,
+        "catenet": 20
+      }
+    },
+    {
+      "task": "rename-published-api",
+      "kind": "edit",
+      "control": false,
+      "baseline": {
+        "passedWithoutBreakage": 1,
+        "taskPassed": 1,
+        "visibleDependentsBroken": 0,
+        "controlsBroken": 0,
+        "tokensTotal": 112445.55,
+        "costUsd": 0.09992913
+      },
+      "catenet": {
+        "passedWithoutBreakage": 1,
+        "taskPassed": 1,
+        "visibleDependentsBroken": 0,
+        "controlsBroken": 0,
+        "tokensTotal": 131426.85,
+        "costUsd": 0.11005901
+      },
+      "runs": {
+        "baseline": 20,
+        "catenet": 20
+      }
+    },
+    {
+      "task": "signature-via-reexports",
+      "kind": "edit",
+      "control": false,
+      "baseline": {
+        "passedWithoutBreakage": 0.45,
+        "taskPassed": 1,
+        "visibleDependentsBroken": 1.5,
+        "controlsBroken": 0.8,
+        "tokensTotal": 172640.25,
+        "costUsd": 0.11488152000000003
+      },
+      "catenet": {
+        "passedWithoutBreakage": 1,
+        "taskPassed": 1,
+        "visibleDependentsBroken": 0,
+        "controlsBroken": 0.6,
+        "tokensTotal": 191666,
+        "costUsd": 0.13351248999999998
+      },
+      "runs": {
+        "baseline": 20,
+        "catenet": 20
+      }
+    }
+  ]
+}

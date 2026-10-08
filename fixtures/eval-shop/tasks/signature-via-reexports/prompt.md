@@ -1,0 +1,1 @@
+Change `formatPrice` in `src/money/format.ts` to `formatPrice(amount, { currency })`. Support `"USD"` (prefix `$`) and `"EUR"` (prefix `€`), and throw if the currency is missing or unknown. Existing callers should keep using USD.

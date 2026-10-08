@@ -322,6 +322,17 @@ statusMessage = "Checking Bash command"
   `commands/`), optional `.claude-plugin/plugin.json`. Paths via `${CLAUDE_PLUGIN_ROOT}` (changes on update; don't store
   state there); persistent data in `${CLAUDE_PLUGIN_DATA}`. Install: `/plugin marketplace add owner/repo`, then
   `/plugin install <name>@<marketplace>` (or `claude plugin install ... --scope project`).
+  - **Observed in 2.1.287 (M4 pilot):**
+    - **Names:** a plugin's MCP server is named `plugin:<plugin>:<server>`, and its tools
+      `mcp__plugin_<plugin>_<server>__<tool>` (Catenet's: `mcp__plugin_catenet_catenet__impact_of`). A server added with
+      `claude mcp add catenet` gets `mcp__catenet__impact_of` instead, so Catenet's injected text names tools without a
+      prefix.
+    - **`--strict-mcp-config`** drops a `--plugin-dir` plugin's MCP server too, while the plugin's hooks still run.
+    - **Built-in plugins:** `system/init` lists them (`cc-plugin-agents-md@builtin`, `cc-plugin-plugin-authoring@builtin`)
+      in every session.
+    - **Inherited environment:** a `claude -p` started from inside another Claude Code session inherits that session's
+      environment (`CLAUDECODE`, `CLAUDE_EFFORT`, `CLAUDE_CODE_ENTRYPOINT`, `MCP_CONNECTION_NONBLOCKING`, ...), which
+      changes its behaviour.
 - **Codex MCP**: `codex mcp add <name> -- <command>` or `[mcp_servers.<name>] command = "...", args = [...]` in
   `config.toml` (`startup_timeout_sec` default 10, `tool_timeout_sec` default 60).
 - **CLAUDE.md imports**: `@path/to/file` (relative to the importing file, max depth 4). **Claude Code reads `AGENTS.md`

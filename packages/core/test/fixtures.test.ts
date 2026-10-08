@@ -48,8 +48,8 @@ const fixtureNames = readdirSync(FIXTURES, { withFileTypes: true })
   .sort();
 
 describe("fixture answer keys", () => {
-  it("finds the three M0 fixtures", () => {
-    expect(fixtureNames).toEqual(["monorepo-mixed", "py-basic", "ts-basic"]);
+  it("finds the M0 fixtures and the M4 eval repository", () => {
+    expect(fixtureNames).toEqual(["eval-shop", "monorepo-mixed", "py-basic", "ts-basic"]);
   });
 
   for (const name of fixtureNames) {

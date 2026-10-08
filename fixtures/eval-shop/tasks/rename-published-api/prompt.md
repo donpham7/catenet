@@ -1,0 +1,1 @@
+Rename `getCart` to `loadCart` in `src/cart/store.ts`. The package entry (`src/index.ts`) should export `loadCart`, plus `getCart` as a deprecated alias for outside consumers; code in this repository should use `loadCart`.

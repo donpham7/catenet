@@ -1,0 +1,77 @@
+diff --git a/src/index.ts b/src/index.ts
+index 66cf150..b28b5cf 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -2,5 +2,5 @@ export * from "./money/index.ts";
+ export { addItem, clearCarts, getCart } from "./cart/store.ts";
+ export type { Cart, CartItem } from "./cart/types.ts";
+ export { checkoutTotal } from "./checkout/total.ts";
+-export { formatDate, parseDate } from "./utils/date.ts";
++export { formatDate, parseDate } from "./time/date.ts";
+ export { isValidEmail } from "./validation/index.ts";
+diff --git a/src/jobs/cleanup.cjs b/src/jobs/cleanup.cjs
+index cb7889e..fc6e91a 100644
+--- a/src/jobs/cleanup.cjs
++++ b/src/jobs/cleanup.cjs
+@@ -1,4 +1,4 @@
+-const dates = require("../utils/date.ts");
++const dates = require("../time/date.ts");
+ 
+ function isExpired(text, days, now) {
+   return dates.addDays(dates.parseDate(text), days) < now;
+diff --git a/src/legacy/schedule.cjs b/src/legacy/schedule.cjs
+index cd50381..64e9a93 100644
+--- a/src/legacy/schedule.cjs
++++ b/src/legacy/schedule.cjs
+@@ -1,4 +1,4 @@
+-const { formatDate, parseDate } = require("../utils/date.ts");
++const { formatDate, parseDate } = require("../time/date.ts");
+ 
+ function normalize(text) {
+   return formatDate(parseDate(text));
+diff --git a/src/orders/history.ts b/src/orders/history.ts
+index 98557e2..47203e2 100644
+--- a/src/orders/history.ts
++++ b/src/orders/history.ts
+@@ -1,4 +1,4 @@
+-import { formatDate } from "../utils/date.ts";
++import { formatDate } from "../time/date.ts";
+ 
+ export interface Order {
+   id: string;
+diff --git a/src/reports/weekly.ts b/src/reports/weekly.ts
+index 93066a6..c310309 100644
+--- a/src/reports/weekly.ts
++++ b/src/reports/weekly.ts
+@@ -1,4 +1,4 @@
+-import { addDays, formatDate } from "../utils/date.ts";
++import { addDays, formatDate } from "../time/date.ts";
+ 
+ export function weekRange(start: Date): string {
+   return `${formatDate(start)}..${formatDate(addDays(start, 6))}`;
+diff --git a/src/shipping/eta.ts b/src/shipping/eta.ts
+index 5c8dede..3d56042 100644
+--- a/src/shipping/eta.ts
++++ b/src/shipping/eta.ts
+@@ -1,4 +1,4 @@
+ export async function etaLabel(shippedAt: Date, transitDays: number): Promise<string> {
+-  const { addDays, formatDate } = await import("../utils/date.ts");
++  const { addDays, formatDate } = await import("../time/date.ts");
+   return `arrives ${formatDate(addDays(shippedAt, transitDays))}`;
+ }
+diff --git a/src/utils/date.ts b/src/time/date.ts
+similarity index 100%
+rename from src/utils/date.ts
+rename to src/time/date.ts
+diff --git a/test/date.test.ts b/test/date.test.ts
+index 0e7d05d..bbfe9a3 100644
+--- a/test/date.test.ts
++++ b/test/date.test.ts
+@@ -1,6 +1,6 @@
+ import assert from "node:assert/strict";
+ import { test } from "node:test";
+-import { formatDate, parseDate } from "../src/utils/date.ts";
++import { formatDate, parseDate } from "../src/time/date.ts";
+ 
+ test("round-trips a date", () => {
+   assert.equal(formatDate(parseDate("2026-03-01")), "2026-03-01");

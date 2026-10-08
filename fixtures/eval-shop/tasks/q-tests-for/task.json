@@ -1,0 +1,12 @@
+{
+  "id": "q-tests-for",
+  "kind": "question",
+  "category": "e",
+  "prompt": "prompt.md",
+  "answer": {
+    "files": [
+      "test/checkout.test.ts",
+      "test/package.test.ts"
+    ]
+  }
+}

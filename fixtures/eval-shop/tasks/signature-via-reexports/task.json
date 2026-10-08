@@ -1,0 +1,39 @@
+{
+  "id": "signature-via-reexports",
+  "kind": "edit",
+  "category": "c",
+  "prompt": "prompt.md",
+  "acceptance": "holdout/acceptance.test.ts",
+  "dependents": [
+    {
+      "file": "src/checkout/total.ts",
+      "edge": "exact",
+      "test": "holdout/total.test.ts"
+    },
+    {
+      "file": "src/checkout/receipt.ts",
+      "edge": "exact",
+      "test": "holdout/receipt.test.ts"
+    },
+    {
+      "file": "src/reports/daily.ts",
+      "edge": "exact",
+      "test": "holdout/daily.test.ts"
+    },
+    {
+      "file": "src/storefront/badge.ts",
+      "edge": "exact",
+      "test": "holdout/badge.test.ts"
+    },
+    {
+      "file": "src/legacy/invoice.cjs",
+      "edge": "exact",
+      "test": "holdout/invoice.test.ts"
+    },
+    {
+      "file": "src/reports/export.ts",
+      "edge": "none",
+      "test": "holdout/export.test.ts"
+    }
+  ]
+}

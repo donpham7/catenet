@@ -1,0 +1,45 @@
+{
+  "runId": "20261007-232450-claude-code",
+  "startedAt": "2026-10-07T23:24:50.000Z",
+  "resumedAt": ["2026-10-08T04:48:30.598Z"],
+  "finishedAt": "2026-10-08T06:04:08.804Z",
+  "driver": "claude-code",
+  "agentVersion": "2.1.287 (Claude Code)",
+  "model": "claude-sonnet-5-5",
+  "maxTurns": 40,
+  "catenetCommit": "0d8ca56c493c+dirty",
+  "suite": {
+    "name": "eval-shop",
+    "hash": "f9b2fe4aa2d8880c21670b4e556b6ba1a833a771e69598fa09b4b42c905722eb",
+    "taskIds": [
+      "boolean-to-result",
+      "leaf-control",
+      "move-module",
+      "q-dependents",
+      "q-tests-for",
+      "rename-published-api",
+      "signature-via-reexports"
+    ],
+    "allTasks": true
+  },
+  "lock": {
+    "hash": "f9b2fe4aa2d8880c21670b4e556b6ba1a833a771e69598fa09b4b42c905722eb",
+    "trials": 20,
+    "model": "claude-sonnet-5-5",
+    "maxTurns": 40,
+    "seed": 2026
+  },
+  "seed": 2026,
+  "trials": 20,
+  "concurrency": 1,
+  "maxCostUsd": 41,
+  "stoppedEarly": false,
+  "node": "24.21.0",
+  "platform": "darwin-arm64",
+  "deviations": [
+    "Claude Code updated itself from 2.1.287 to 2.1.293 at 2026-10-08T04:53:05Z, 4.5 minutes after the resume; about 60% of the sessions (most after the resume) ran on 2.1.293. Sessions did not record their version then. A split before and after points the same way (M4 review).",
+    "The pre-registration (PREREGISTRATION.md, suite.lock.json) was written before the run but not committed, so git does not prove its timing; the code under test is recorded as 0d8ca56+dirty.",
+    "The run was interrupted after 96 of 280 sessions and resumed on the same schedule, lock and plugin bundle.",
+    "Recorded after the run (2026-10-08) during the M4 review; the data in raw.jsonl is unchanged."
+  ]
+}

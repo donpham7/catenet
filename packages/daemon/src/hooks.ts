@@ -16,6 +16,7 @@ import {
   loadConfig,
   type NeutralEvent,
   openGraph,
+  repoRelative,
   sessionContext,
 } from "@catenet/core";
 
@@ -98,9 +99,7 @@ export class HookHandler {
   }
 
   private rel(path: string, cwd: string): string | null {
-    const abs = isAbsolute(path) ? path : resolve(cwd, path);
-    const r = relative(this.root, abs);
-    return r && !r.startsWith("..") && !isAbsolute(r) ? r.split("\\").join("/") : null;
+    return repoRelative(path, this.root, cwd);
   }
 
   /** Never throws: a hook must not be able to affect the agent through an error here. */
@@ -200,6 +199,7 @@ export class HookHandler {
       event: hookEvent,
       sync: adapter.isSyncEvent(hookEvent),
       ms: Date.now() - started,
+      contextChars: context?.length ?? 0,
     });
     return { output };
   }

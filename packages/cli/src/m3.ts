@@ -6,6 +6,7 @@ import {
   configPath,
   DEFAULT_CONFIG,
   defaultDbPath,
+  EventSchemaError,
   EventStore,
   indexRepo,
   isTooBroadForRoot,
@@ -111,7 +112,14 @@ export function reportCommand(io: Io, root: string, selector: string, json: bool
     io.out("no sessions recorded yet");
     return 0;
   }
-  const store = new EventStore(path, { root });
+  let store: EventStore;
+  try {
+    store = new EventStore(path, { root, upgrade: false });
+  } catch (err) {
+    if (!(err instanceof EventSchemaError)) throw err;
+    io.out(sanitizeText(err.message));
+    return 0;
+  }
   let r: SessionReport | null;
   try {
     r = store.report(selector);

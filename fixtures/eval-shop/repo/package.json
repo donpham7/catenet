@@ -1,0 +1,13 @@
+{
+  "name": "eval-shop",
+  "version": "1.0.0",
+  "description": "Shop domain library: carts, checkout, pricing, reports.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p ."
+  }
+}

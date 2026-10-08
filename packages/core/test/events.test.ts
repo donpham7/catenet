@@ -1,10 +1,26 @@
 // M3 event log: redaction, diff stats, recording, retention and the session report.
-import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
-import { EventStore, lineDiff, redactSecrets, summarizeToolInput } from "../src/index.js";
+import {
+  canonicalPath,
+  EventSchemaError,
+  EventStore,
+  lineDiff,
+  redactSecrets,
+  repoRelative,
+  summarizeToolInput,
+} from "../src/index.js";
 
 const temps: string[] = [];
 afterEach(() => {
@@ -101,6 +117,24 @@ describe("summarizeToolInput", () => {
   });
 });
 
+describe("repoRelative", () => {
+  it("treats a path reached through a symlink as inside the repository (macOS /var -> /private/var)", () => {
+    const dir = tempDir();
+    const real = join(dir, "real");
+    mkdirSync(join(real, "src"), { recursive: true });
+    writeFileSync(join(real, "src", "a.ts"), "");
+    symlinkSync(real, join(dir, "alias"));
+    expect(repoRelative(join(real, "src", "a.ts"), join(dir, "alias"))).toBe("src/a.ts");
+    expect(repoRelative(join(dir, "alias", "src", "new.ts"), real)).toBe("src/new.ts"); // not created yet
+    expect(repoRelative(join(dir, "elsewhere.ts"), real)).toBeNull();
+    expect(canonicalPath(join(dir, "alias", "src"))).toBe(canonicalPath(join(real, "src")));
+    // A symlinked file inside the repository keeps its own name, wherever it points (the indexer keys it that way).
+    writeFileSync(join(dir, "outside.ts"), "");
+    symlinkSync(join(dir, "outside.ts"), join(real, "src", "linked.ts"));
+    expect(repoRelative(join(real, "src", "linked.ts"), real)).toBe("src/linked.ts");
+  });
+});
+
 describe("EventStore", () => {
   it("records a session and reports it", () => {
     const s = store();
@@ -172,7 +206,7 @@ describe("EventStore", () => {
     expect(r?.toolCalls.byOutcome).toEqual({ failed: 1, succeeded: 1, unknown: 1 });
     expect(r?.diffs).toEqual([{ path: "src/a.ts", added: 3, removed: 1, edits: 1, partial: false }]);
     // Percentiles cover only hooks the agent waited for; the async PostToolUse is counted but not timed.
-    expect(r?.hooks).toEqual({ count: 3, sync: 2, failures: 0, p50: 40, p95: 60, max: 60 });
+    expect(r?.hooks).toEqual({ count: 3, sync: 2, withContext: 0, failures: 0, p50: 40, p95: 60, max: 60 });
     s.close();
   });
 
@@ -329,6 +363,34 @@ describe("EventStore", () => {
     expect(s.sessions()).toHaveLength(1);
     expect(existsSync(`${path}.v1.bak`)).toBe(true);
     s.close();
+  });
+
+  it("never overwrites an earlier backup, and lets readers refuse to upgrade", () => {
+    const dir = tempDir();
+    const path = join(dir, "events.db");
+    const oldFile = (content: string) => {
+      const db = new DatabaseSync(path);
+      db.exec(
+        `CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL); INSERT INTO meta VALUES ('schema_version', '1'); CREATE TABLE note (t TEXT); INSERT INTO note VALUES ('${content}');`,
+      );
+      db.close();
+    };
+    oldFile("first");
+    expect(() => new EventStore(path, { upgrade: false })).toThrow(EventSchemaError);
+    expect(existsSync(`${path}.v1.bak`)).toBe(false); // a reader leaves it alone
+    new EventStore(path).close();
+    rmSync(path);
+    for (const s of ["-wal", "-shm"]) rmSync(path + s, { force: true });
+    oldFile("second");
+    new EventStore(path).close();
+    const read = (p: string) => {
+      const db = new DatabaseSync(p);
+      const t = (db.prepare("SELECT t FROM note").get() as { t: string }).t;
+      db.close();
+      return t;
+    };
+    expect(read(`${path}.v1.bak`)).toBe("first");
+    expect(read(`${path}.v1.2.bak`)).toBe("second");
   });
 
   it("writes .catenet/.gitignore when it creates the directory", () => {

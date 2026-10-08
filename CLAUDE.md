@@ -91,4 +91,6 @@ node packages/cli/dist/main.js daemon start|stop|status --repo <dir>
 node packages/cli/dist/main.js doctor --repo <dir>
 node packages/cli/dist/main.js init --repo <dir>      # opt a repo in (.catenet/, index, daemon); then report [--session last|<id>] [--json]
 claude --plugin-dir plugins/claude-code               # one session with the Catenet plugin (hooks + MCP), after build:plugin
+node packages/cli/dist/main.js eval run --plan         # M4 benchmark: price a run; `eval run` runs real sessions (your account),
+                                                       # `--driver patch` is a free self-test; method: packages/eval/README.md
 ```

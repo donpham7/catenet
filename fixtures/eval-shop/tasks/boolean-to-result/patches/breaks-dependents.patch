@@ -1,0 +1,32 @@
+diff --git a/src/validation/email.ts b/src/validation/email.ts
+index 8a1c73b..988a3f7 100644
+--- a/src/validation/email.ts
++++ b/src/validation/email.ts
+@@ -1,4 +1,9 @@
+-export function isValidEmail(email: string): boolean {
++export type EmailCheck = { ok: true } | { ok: false; reason: "empty" | "missing @" | "malformed" };
++
++export function isValidEmail(email: string): EmailCheck {
+   const trimmed = email.trim();
+-  return trimmed.length > 0 && trimmed.includes("@") && !trimmed.startsWith("@") && !trimmed.endsWith("@");
++  if (trimmed.length === 0) return { ok: false, reason: "empty" };
++  if (!trimmed.includes("@")) return { ok: false, reason: "missing @" };
++  if (trimmed.startsWith("@") || trimmed.endsWith("@")) return { ok: false, reason: "malformed" };
++  return { ok: true };
+ }
+diff --git a/test/email.test.ts b/test/email.test.ts
+index f3b6559..3c6cac4 100644
+--- a/test/email.test.ts
++++ b/test/email.test.ts
+@@ -3,9 +3,9 @@ import { test } from "node:test";
+ import { isValidEmail } from "../src/validation/email.ts";
+ 
+ test("accepts a plain address", () => {
+-  assert.equal(isValidEmail("ann@example.com"), true);
++  assert.deepEqual(isValidEmail("ann@example.com"), { ok: true });
+ });
+ 
+ test("rejects an address without @", () => {
+-  assert.equal(isValidEmail("ann.example.com"), false);
++  assert.deepEqual(isValidEmail("ann.example.com"), { ok: false, reason: "missing @" });
+ });

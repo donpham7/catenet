@@ -1,0 +1,1 @@
+Change `isValidEmail` in `src/validation/email.ts` to return `{ ok: true }` for a valid address, or `{ ok: false, reason }` with `reason` one of `"empty"` (blank after trimming), `"missing @"` or `"malformed"` (starts or ends with `@`).

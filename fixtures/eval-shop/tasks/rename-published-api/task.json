@@ -1,0 +1,24 @@
+{
+  "id": "rename-published-api",
+  "kind": "edit",
+  "category": "b",
+  "prompt": "prompt.md",
+  "acceptance": "holdout/acceptance.test.ts",
+  "dependents": [
+    {
+      "file": "src/checkout/total.ts",
+      "edge": "exact",
+      "test": "holdout/total.test.ts"
+    },
+    {
+      "file": "src/admin/dashboard.ts",
+      "edge": "exact",
+      "test": "holdout/dashboard.test.ts"
+    },
+    {
+      "file": "src/legacy/cart-sync.cjs",
+      "edge": "exact",
+      "test": "holdout/cart-sync.test.ts"
+    }
+  ]
+}

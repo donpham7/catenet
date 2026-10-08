@@ -424,6 +424,25 @@ export class SqliteGraphStore {
     );
   }
 
+  /**
+   * The subset of `paths` that a test reaches (a `tests` edge into the file or one of its symbols). Looks up only these
+   * paths, so the edit hook doesn't scan every test edge in the repository (M4 review).
+   */
+  testedAmong(paths: readonly string[]): Set<string> {
+    if (paths.length === 0) return new Set();
+    const marks = paths.map(() => "?").join(",");
+    return new Set(
+      (
+        this.db
+          .prepare(
+            `SELECT DISTINCT d.path AS path FROM nodes d JOIN edges e ON e.dst = d.id
+             WHERE d.path IN (${marks}) AND d.kind IN ('file', 'symbol') AND e.kind = 'tests'`,
+          )
+          .all(...paths) as { path: string }[]
+      ).map((r) => r.path),
+    );
+  }
+
   evidence(targetIds: number[], fromPath: string): EvidenceRow[] {
     if (targetIds.length === 0) return [];
     const marks = targetIds.map(() => "?").join(",");

@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!fixtures", "!**/dist", "!spikes/data", "!plugins/*/dist"]
+    "includes": ["**", "!fixtures", "!**/dist", "!spikes/data", "!plugins/*/dist", "!packages/eval/results"]
   },
   "formatter": {
     "indentStyle": "space",

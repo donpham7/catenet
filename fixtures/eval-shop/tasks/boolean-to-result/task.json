@@ -1,0 +1,29 @@
+{
+  "id": "boolean-to-result",
+  "kind": "edit",
+  "category": "a",
+  "prompt": "prompt.md",
+  "acceptance": "holdout/acceptance.test.ts",
+  "dependents": [
+    {
+      "file": "src/signup/form.ts",
+      "edge": "exact",
+      "test": "holdout/signup.test.ts"
+    },
+    {
+      "file": "src/newsletter/subscribe.ts",
+      "edge": "exact",
+      "test": "holdout/subscribe.test.ts"
+    },
+    {
+      "file": "src/accounts/invite.ts",
+      "edge": "exact",
+      "test": "holdout/invite.test.ts"
+    },
+    {
+      "file": "src/legacy/mailer.cjs",
+      "edge": "exact",
+      "test": "holdout/mailer.test.ts"
+    }
+  ]
+}

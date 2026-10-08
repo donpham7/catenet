@@ -8,7 +8,7 @@ import { prepareStateDir } from "../config.js";
 import { redactSecrets, summarizeToolInput } from "./redact.js";
 import type { AgentName, NeutralEvent } from "./types.js";
 
-export const EVENTS_SCHEMA_VERSION = 2;
+export const EVENTS_SCHEMA_VERSION = 3;
 
 /**
  * The hook client's failure log, next to events.db. The client can't write events.db (the daemon is its only writer),
@@ -42,10 +42,10 @@ CREATE TABLE compactions (
   id INTEGER PRIMARY KEY, agent TEXT NOT NULL, session_id TEXT NOT NULL, ts INTEGER NOT NULL, phase TEXT NOT NULL, trigger TEXT NOT NULL
 );
 -- ms: from the hook process starting to the daemon's answer. sync: the agent waited for this hook (the latency
--- budget applies only to these).
+-- budget applies only to these). context_chars: length of the context Catenet added to the agent (0 = none).
 CREATE TABLE hook_calls (
   id INTEGER PRIMARY KEY, agent TEXT NOT NULL, session_id TEXT NOT NULL, ts INTEGER NOT NULL, event TEXT NOT NULL,
-  sync INTEGER NOT NULL, ms INTEGER NOT NULL
+  sync INTEGER NOT NULL, ms INTEGER NOT NULL, context_chars INTEGER NOT NULL DEFAULT 0
 );
 -- Gate decisions arrive in M5; the table exists so the schema is stable.
 CREATE TABLE decisions (
@@ -100,11 +100,13 @@ export interface SessionReport {
   compactions: number;
   /**
    * `count` covers every hook the daemon answered; `sync` and the percentiles cover only the hooks the agent waited
-   * for. `failures` are hooks that never reached the daemon or timed out (from the client's log).
+   * for. `failures` are hooks that never reached the daemon or timed out (from the client's log). `withContext` is
+   * how many answers added context for the agent.
    */
   hooks: {
     count: number;
     sync: number;
+    withContext: number;
     failures: number;
     p50: number | null;
     p95: number | null;
@@ -117,6 +119,15 @@ const pct = (sorted: number[], p: number) =>
     ? null
     : (sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))] ?? null);
 
+/** events.db holds another schema version and this opener may not upgrade it (e.g. `catenet report`). */
+export class EventSchemaError extends Error {
+  constructor(readonly found: string) {
+    super(
+      `events.db uses schema version ${found}; Catenet's daemon sets it aside and starts a new one on its next hook`,
+    );
+  }
+}
+
 export class EventStore {
   private db!: DatabaseSync;
   private readonly stmts = new Map<string, StatementSync>();
@@ -125,19 +136,25 @@ export class EventStore {
   /** Schema version found in an existing file (set by open()). */
   private foundVersion = "";
 
-  /** `root` is the repository root: tool-call paths inside it are stored relative to it. */
+  /**
+   * `root` is the repository root: tool-call paths inside it are stored relative to it. `upgrade: false` (readers such
+   * as `catenet report`) throws EventSchemaError on another schema version instead of setting the file aside, so only
+   * the daemon, the writer, ever moves it (M4 review).
+   */
   constructor(
     private readonly path: string,
-    opts: { root?: string } = {},
+    opts: { root?: string; upgrade?: boolean } = {},
   ) {
     this.root = opts.root ?? "";
     this.errorLog = path === ":memory:" ? null : join(dirname(path), HOOK_ERRORS_LOG);
     if (path !== ":memory:") prepareStateDir(dirname(path));
     if (!this.open()) {
       // Written by another schema version. The log is pre-release and local, so keep the old file aside and start a
-      // fresh one rather than fail every insert.
+      // fresh one rather than fail every insert. A backup is never overwritten.
       this.db.close();
-      const backup = `${path}.v${this.foundVersion}.bak`;
+      if (opts.upgrade === false) throw new EventSchemaError(this.foundVersion);
+      let backup = `${path}.v${this.foundVersion}.bak`;
+      for (let n = 2; existsSync(backup); n++) backup = `${path}.v${this.foundVersion}.${n}.bak`;
       for (const suffix of ["", "-wal", "-shm"])
         if (existsSync(path + suffix)) renameSync(path + suffix, backup + suffix);
       this.open();
@@ -309,12 +326,20 @@ export class EventStore {
     });
   }
 
-  recordHookCall(h: SessionKey & { event: string; sync: boolean; ms: number }): void {
+  recordHookCall(h: SessionKey & { event: string; sync: boolean; ms: number; contextChars?: number }): void {
     this.tx(() => {
       this.touch(h);
       this.stmt(
-        "INSERT INTO hook_calls (agent, session_id, ts, event, sync, ms) VALUES (?, ?, ?, ?, ?, ?)",
-      ).run(h.agent, h.sessionId, h.ts, h.event, h.sync ? 1 : 0, Math.max(0, Math.round(h.ms)));
+        "INSERT INTO hook_calls (agent, session_id, ts, event, sync, ms, context_chars) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        h.agent,
+        h.sessionId,
+        h.ts,
+        h.event,
+        h.sync ? 1 : 0,
+        Math.max(0, Math.round(h.ms)),
+        h.contextChars ?? 0,
+      );
     });
   }
 
@@ -396,8 +421,8 @@ export class EventStore {
       ).all(...key) as { path: string; added: number; removed: number; edits: number; partial: number }[]
     ).map((d) => ({ ...d, partial: d.partial === 1 }));
     const hookRows = this.stmt(
-      "SELECT ms, sync FROM hook_calls WHERE agent = ? AND session_id = ? ORDER BY ms",
-    ).all(...key) as { ms: number; sync: number }[];
+      "SELECT ms, sync, context_chars AS contextChars FROM hook_calls WHERE agent = ? AND session_id = ? ORDER BY ms",
+    ).all(...key) as { ms: number; sync: number; contextChars: number }[];
     const ms = hookRows.filter((h) => h.sync === 1).map((h) => h.ms);
     const compactions = (
       this.stmt("SELECT COUNT(*) AS n FROM compactions WHERE agent = ? AND session_id = ?").get(...key) as {
@@ -430,6 +455,7 @@ export class EventStore {
       hooks: {
         count: hookRows.length,
         sync: ms.length,
+        withContext: hookRows.filter((h) => h.contextChars > 0).length,
         failures: this.hookFailures(s.id as string),
         p50: pct(ms, 50),
         p95: pct(ms, 95),

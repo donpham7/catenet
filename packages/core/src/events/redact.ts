@@ -1,6 +1,7 @@
 // Privacy defaults for the event log (ARCHITECTURE 2.4, CLAUDE.md principle 4): store paths, hashes and counts; any
 // text that is kept (prompt previews, Bash commands, search patterns) goes through redactSecrets first.
-import { isAbsolute, relative } from "node:path";
+import { isAbsolute } from "node:path";
+import { repoRelative } from "../fspath.js";
 
 const R = "[REDACTED]";
 
@@ -57,11 +58,8 @@ export function redactSecrets(text: string): string {
 const PATH_KEYS = ["file_path", "notebook_path", "path"];
 
 /** Repo-relative when inside the repo (`root` must be the absolute repository root), otherwise as given. */
-const relPath = (p: string, root: string) => {
-  if (!isAbsolute(p) || !isAbsolute(root)) return p;
-  const rel = relative(root, p);
-  return rel && !rel.startsWith("..") && !isAbsolute(rel) ? rel.split("\\").join("/") : p;
-};
+const relPath = (p: string, root: string) =>
+  isAbsolute(p) && isAbsolute(root) ? (repoRelative(p, root) ?? p) : p;
 
 /**
  * The part of a shell command that says what it does, not the data it carries: the first line only, cut before a

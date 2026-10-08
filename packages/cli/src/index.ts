@@ -46,6 +46,7 @@ Usage:
   catenet init                           enable Catenet in this repo (index, daemon, plugin instructions)
   catenet report [--session last|<id>]   what the agent did in a session
   catenet hook <agent>                   hook entry for manual settings (stdin payload; --repo overrides its cwd)
+  catenet eval run|report|lock           the benchmark harness (catenet eval --help)
 
 Targets: a file path (src/lib/format.ts), path#Symbol (src/lib/format.ts#formatCurrency) or a symbol name.
 Options: --repo <dir> (default: git root, else cwd), --json, --help`;
@@ -186,6 +187,11 @@ async function daemonCommand(io: Io, root: string, sub: string | undefined, json
 
 export async function main(argv: string[], io: Io = defaultIo): Promise<number> {
   let parsed: ReturnType<typeof parseArgs<{ options: typeof OPTIONS; allowPositionals: true }>>;
+  // The eval harness has its own options (packages/cli/src/eval.ts).
+  if (argv[0] === "eval") {
+    const { evalCommand } = await import("./eval.js");
+    return evalCommand(io, argv.slice(1));
+  }
   const OPTIONS = {
     repo: { type: "string" },
     full: { type: "boolean" },

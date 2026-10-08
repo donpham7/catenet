@@ -61,6 +61,7 @@ describe("daemon /hook", () => {
     expect(report?.session).toMatchObject({ source: "startup", endReason: "other" });
     expect(report?.toolCalls.total).toBe(3);
     expect(report?.hooks.count).toBe(5);
+    expect(report?.hooks.withContext).toBe(2); // the session map and the first edit of format.ts
     expect(report?.hooks.p50).toBeGreaterThanOrEqual(30);
   });
 
@@ -178,6 +179,32 @@ describe("daemon /hook", () => {
     const r = await hook(daemon, { ...base(root), hook_event_name: "SessionStart", source: "startup" });
     expect(r.output).toBe("");
     expect((await call<{ ok: boolean }>(daemon.socket, "GET", "/health")).ok).toBe(true);
+  });
+
+  it("injects edit context when the agent reports paths through a symlink to the root (M4 pilot)", async () => {
+    const repo = fixtureCopy("ts-basic");
+    cleanups.push(repo.cleanup);
+    const { mkdirSync, symlinkSync, realpathSync } = await import("node:fs");
+    mkdirSync(repo.runtime, { recursive: true });
+    const alias = join(repo.runtime, "alias");
+    symlinkSync(repo.root, alias);
+    // The daemon knows the repository by the alias; the agent reports real paths (or the other way round on macOS).
+    const daemon = createDaemon({ root: alias, socket: join(repo.runtime, "d.sock"), log: () => {} });
+    cleanups.push(() => daemon.stop());
+    await daemon.start();
+    await until(() => daemon.snapshot().lastIndex, 10_000);
+    const real = realpathSync(repo.root);
+    const r = await hook(daemon, {
+      ...base(real),
+      hook_event_name: "PreToolUse",
+      tool_name: "Edit",
+      tool_use_id: "s1",
+      tool_input: { file_path: join(real, "src/lib/format.ts") },
+    });
+    expect(ctx(r.output)).toContain("8 files depend on it directly");
+    const store = new EventStore(join(repo.root, ".catenet/events.db"));
+    expect(store.report("s1")?.toolCalls.list[0]?.targets).toEqual(["src/lib/format.ts"]);
+    store.close();
   });
 
   it("respects config: injection can be turned off", async () => {

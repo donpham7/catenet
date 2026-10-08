@@ -23,6 +23,7 @@
     "@catenet/adapter-claude-code": "workspace:*",
     "@catenet/core": "workspace:*",
     "@catenet/daemon": "workspace:*",
+    "@catenet/eval": "workspace:*",
     "@catenet/mcp": "workspace:*",
     "@modelcontextprotocol/client": "2.3.0"
   }
